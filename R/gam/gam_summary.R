@@ -100,6 +100,51 @@ pred |>
   theme(legend.position = 'none')
 
 
+# Distribution of residuals by ID -----------------------------------------
+
+pred |> 
+  filter(type == 'best') |> 
+  ggplot() + 
+  geom_histogram(aes(x = resid)) +
+  labs(x = 'Residuals', title = 'best')
+
+pred |> 
+  filter(type == 'ran.age') |>
+  left_join(age.df, by = 'swfsc.id') |>
+  mutate(age.confidence = factor(age.confidence)) |> 
+  ggplot() + 
+  geom_histogram(aes(x = resid, fill = age.confidence)) +
+  geom_vline(
+    aes(xintercept = median), 
+    data = pred |> 
+      filter(type == 'ran.age') |> 
+      group_by(swfsc.id) |> 
+      summarize(median = median(resid), .groups = 'drop') 
+  ) +
+  facet_wrap(~ swfsc.id, scales = 'free_y') +
+  scale_fill_manual(values = conf.colors) +
+  labs(x = 'Residuals', title = 'ran.age') +
+  theme(legend.position = 'none')
+
+pred |> 
+  filter(type == 'ran.age.meth') |> 
+  left_join(age.df, by = 'swfsc.id') |>
+  mutate(age.confidence = factor(age.confidence)) |> 
+  ggplot() + 
+  geom_histogram(aes(x = resid, fill = age.confidence)) + 
+  geom_vline(
+    aes(xintercept = median), 
+    data = pred |> 
+      filter(type == 'ran.age.meth') |> 
+      group_by(swfsc.id) |> 
+      summarize(median = median(resid), .groups = 'drop') 
+  ) +
+  facet_wrap(~ swfsc.id, scales = 'free_y') +
+  scale_fill_manual(values = conf.colors) +
+  labs(x = 'Residuals', title = 'ran.age.meth') +
+  theme(legend.position = 'none')
+
+
 # Predicted vs best age ---------------------------------------------------
 
 pred |> 
@@ -143,6 +188,3 @@ pred |>
   labs(x = 'CRC age', y = 'Residual') +
   facet_grid(age.confidence ~ type, scales = 'free_y') +
   theme(legend.position = 'none')
-
-
-
