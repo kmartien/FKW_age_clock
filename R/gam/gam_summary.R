@@ -1,13 +1,13 @@
 rm(list = ls())
 library(tidyverse)
-load("R/data/age_and_methylation_data.rdata")
+load("../age_and_methylation_data.rdata")
 
 pred <- bind_rows(
-  readRDS('R/gam/gam_best.rds') |> 
+  readRDS('gam_best.rds') |> 
     mutate(type = 'best'),
-  readRDS('R/gam/gam_ran_age.rds') |> 
+  readRDS('gam_ran_age.rds') |> 
     mutate(type = 'ran.age'),
-  readRDS('R/gam/gam_ran_age_meth.rds') |> 
+  readRDS('gam_ran_age_meth.rds') |> 
     mutate(type = 'ran.age.meth')
 ) 
 
@@ -21,20 +21,19 @@ errSmry <- function(df) {
       median.se = median(sq.err),
       mode.se = modeest::venter(sq.err), 
       cor.age = cor(age.pred, age.resp),
+      pct.gt.best = mean(age.pred > age.best),
       .groups = 'drop'
     )
 }
 
 smry <- pred |> 
-  left_join(
-    select(age.df, c(swfsc.id, age.confidence)),
-    by = 'swfsc.id'
-  ) |> 
+  left_join(age.df, by = 'swfsc.id') |> 
   mutate(age.confidence = as.character(age.confidence)) |> 
   group_by(type, age.confidence) |> 
   errSmry() |> 
   bind_rows(
     pred |> 
+      left_join(age.df, by = 'swfsc.id') |> 
       group_by(type) |> 
       errSmry() |> 
       mutate(age.confidence = 'All')
@@ -56,20 +55,65 @@ pred |>
   theme(legend.position = 'top')
 
 
+# Distribution of predictions by ID ---------------------------------------
+
+pred |> 
+  filter(type == 'best') |> 
+  ggplot() + 
+  geom_histogram(aes(x = age.pred)) +
+  labs(x = 'GAM predicted age', title = 'best')
+
+pred |> 
+  filter(type == 'ran.age') |>
+  left_join(age.df, by = 'swfsc.id') |>
+  mutate(age.confidence = factor(age.confidence)) |> 
+  ggplot() + 
+  geom_histogram(aes(x = age.pred, fill = age.confidence)) +
+  geom_vline(
+    aes(xintercept = median), 
+    data = pred |> 
+      filter(type == 'ran.age') |> 
+      group_by(swfsc.id) |> 
+      summarize(median = median(age.pred), .groups = 'drop') 
+  ) +
+  facet_wrap(~ swfsc.id, scales = 'free_y') +
+  scale_fill_manual(values = conf.colors) +
+  labs(x = 'GAM predicted age', title = 'ran.age') +
+  theme(legend.position = 'none')
+
+pred |> 
+  filter(type == 'ran.age.meth') |> 
+  left_join(age.df, by = 'swfsc.id') |>
+  mutate(age.confidence = factor(age.confidence)) |> 
+  ggplot() + 
+  geom_histogram(aes(x = age.pred, fill = age.confidence)) + 
+  geom_vline(
+    aes(xintercept = median), 
+    data = pred |> 
+      filter(type == 'ran.age.meth') |> 
+      group_by(swfsc.id) |> 
+      summarize(median = median(age.pred), .groups = 'drop') 
+  ) +
+  facet_wrap(~ swfsc.id, scales = 'free_y') +
+  scale_fill_manual(values = conf.colors) +
+  labs(x = 'GAM predicted age', title = 'ran.age.meth') +
+  theme(legend.position = 'none')
+
+
 # Predicted vs best age ---------------------------------------------------
 
 pred |> 
   group_by(type, swfsc.id) |> 
   summarize(
-    age.pred = modeest::venter(age.pred),
-    lci = modeest::venter(lci),
-    uci = modeest::venter(uci)
+    as.data.frame(rbind(HDInterval::hdi(age.pred))), 
+    age.pred = median(age.pred),
+    .groups = 'drop'
   ) |> 
   left_join(age.df, by = 'swfsc.id') |> 
   mutate(age.confidence = factor(age.confidence)) |> 
   ggplot() + 
   geom_abline(intercept = 0, slope = 1) +  
-  geom_segment(aes(x = age.best, xend = age.best, y = lci, yend = uci, color = age.confidence), alpha = 0.5) +
+  geom_segment(aes(x = age.best, xend = age.best, y = lower, yend = upper, color = age.confidence), alpha = 0.5) +
   geom_segment(aes(x = age.min, xend = age.max, y = age.pred, yend = age.pred, color = age.confidence), alpha = 0.5) +
   geom_point(aes(x = age.best, y = age.pred, color = age.confidence), size = 3) +
   scale_color_manual(values = conf.colors) +
@@ -82,13 +126,11 @@ pred |>
 
 pred |> 
   group_by(type, swfsc.id) |> 
-  summarize(
-    age.pred = modeest::venter(age.pred),
-    lci = modeest::venter(lci),
-    uci = modeest::venter(uci),
+  summarize( 
+    age.pred = median(age.pred),
     resid.lci = unname(quantile(resid, 0.025)),
     resid.uci = unname(quantile(resid, 0.975)),
-    resid = modeest::venter(resid)
+    resid = median(resid)
   ) |> 
   left_join(age.df, by = 'swfsc.id') |>
   mutate(age.confidence = factor(age.confidence)) |> 
@@ -101,3 +143,6 @@ pred |>
   labs(x = 'CRC age', y = 'Residual') +
   facet_grid(age.confidence ~ type, scales = 'free_y') +
   theme(legend.position = 'none')
+
+
+

@@ -1,11 +1,10 @@
 rm(list = ls())
 library(tidyverse)
 library(glmnet)
-load("R/data/age_and_methylation_data.rdata")
+load("../age_and_methylation_data.rdata")
 
 model.df <- age.df |>
   filter(swfsc.id %in% ids.to.keep) |>
-  arrange(age.confidence, age.best, age.min, age.max) |> 
   left_join(
     logit.meth.normal.params |>
       filter(loc.site %in% sites.to.keep) |>
@@ -13,8 +12,7 @@ model.df <- age.df |>
       pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
     by = 'swfsc.id'
   ) |> 
-  column_to_rownames('swfsc.id') |> 
-  mutate(inv.var = 1 / age.var)
+  column_to_rownames('swfsc.id') 
 
 
 # standard inverse variance weighted LOO cv.glmnet run at given alpha
@@ -22,34 +20,33 @@ ageCVglmnetLOO <- function(df, sites, alpha) {
   cv.glmnet(
     x = as.matrix(df[, sites]),
     y = df$age.best,
-    weights = df$inv.var,
     alpha = alpha,
     foldid = 1:nrow(df)
   ) 
 }
 
-# return median cvm at 1se for alpha and nrep replicates
-median.cvm.1se <- function(alpha, df, nrep) {
+# return median cvm at minimum lambda for alpha and nrep replicates
+median.cvm.min <- function(alpha, df, nrep) {
   parallel::mclapply(1:nrep, function(i) {
     cv.fit <- tryCatch({
       ageCVglmnetLOO(df, sites.to.keep, alpha)
     }, error = function(e) NULL)
     if(is.null(cv.fit)) NA else {
-      cv.fit$cvm[cv.fit$lambda == cv.fit$lambda.1se]
+      cv.fit$cvm[cv.fit$lambda == cv.fit$lambda.min]
     } 
   }, mc.cores = 6) |> 
     unlist() |> 
     median(na.rm = TRUE)
 }
 
-# find optimal alpha (lowest median cvm at 1se)
+# find optimal alpha (lowest median cvm at minimum lambda)
 optimum.alpha <- optim(
   par = c(alpha = 0.3),
-  fn = median.cvm.1se,
+  fn = median.cvm.min,
   method = "Brent",
   lower = 0.0001,
   upper = 0.5,
-  df = model.df,
+  df = filter(model.df, age.confidence %in% 4:5),
   nrep = 1000
 )
 optimum.alpha
@@ -57,20 +54,24 @@ optimum.alpha
 # multiple LOO runs of the glmnet model with alpha at lowest cvm
 glmnet.fit <- parallel::mclapply(1:1000, function(i) {
   tryCatch({
-    ageCVglmnetLOO(model.df, sites.to.keep, optimum.alpha$par)
+    ageCVglmnetLOO(
+      filter(model.df, age.confidence %in% 4:5), 
+      sites.to.keep, 
+      optimum.alpha$par
+    )
   }, error = function(e) NULL)
 }, mc.cores = 10)
 
-#save.image('glmnet.rdata')
+save.image('glmnet.rdata')
 
 
 
-# distribution of lambda at 1se across model replicates
-lambda.1se <- sapply(glmnet.fit, function(x) {
-  if(is.list(x)) x$lambda.1se else NA
+# distribution of minimum lambda across model replicates
+lambda.min <- sapply(glmnet.fit, function(x) {
+  if(is.list(x)) x$lambda.min else NA
 })
-hist(lambda.1se)
-swfscMisc::distSmry(lambda.1se, method = 'venter')
+hist(lambda.min)
+swfscMisc::distSmry(lambda.min, method = 'venter')
 
 
 # distribution of predicted age across model replicates
@@ -78,11 +79,11 @@ pred.age <- lapply(glmnet.fit, function(x) {
   predict(
     x, 
     as.matrix(model.df[, sites.to.keep]),
-    s = 'lambda.1se'
+    s = 'lambda.min'
   ) |> 
     as.data.frame() |> 
     rownames_to_column('swfsc.id') |> 
-    rename(pred.age = 'lambda.1se')
+    rename(pred.age = 'lambda.min')
 }) |> 
   bind_rows() 
 

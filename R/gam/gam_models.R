@@ -1,22 +1,19 @@
 rm(list = ls())
 library(tidyverse)
 library(mgcv)
-source('R/misc_funcs.R')
-load("R/data/age_and_methylation_data.rdata")
+source('../misc_funcs.R')
+load("../age_and_methylation_data.rdata")
 
-sites.2.use <- "RFsites" #"All" or "RFsites"
+# select important sites from Random Forest
+sites <- readRDS('../random forest/rf_site_importance.rds') |> 
+  filter(pval <= 0.1) |> 
+  pull('loc.site')
 
-sites <- sites.to.keep
-if(sites.2.use == "RFsites"){
-  # select important sites from Random Forest
-  sites <- readRDS('R/random forest/rf_site_importance.rds') |> 
-    filter(pval <= 0.1) |> 
-    pull('loc.site')
-}
-
+# subset all data
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)
 
+# form model data with mean logit(Pr(methylation))
 model.df <- age.df |> 
   left_join(
     logit.meth.normal.params |> 
@@ -25,14 +22,14 @@ model.df <- age.df |>
     by = 'swfsc.id'
   ) 
 
-nrep <- 1000
+nrep <- 5000
 ncores <- 10
 
 # Best age and methylation estimates --------------------------------------
 
 train.df <- filter(model.df, age.confidence %in% 4:5)
-predictAllIDsGAM(train.df, model.df, sites, 'age.best') |> 
-  saveRDS('R/gam/gam_best.rds')
+predictAllIDs(train.df, model.df, sites, 'age.best') |> 
+  saveRDS('gam_best.rds')
 
 
 # Random age and best methylation estimates -------------------------------
@@ -50,7 +47,7 @@ parallel::mclapply(1:nrep, function(j) {
   predictAllIDs(train.df, ran.df, sites, 'age.ran')
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS('R/gam/gam_ran_age.rds')
+  saveRDS('gam_ran_age.rds')
 
 
 # Random age and random methylation estimates -----------------------------
@@ -63,4 +60,4 @@ parallel::mclapply(1:nrep, function(j) {
   predictAllIDs(train.df, ran.df, sites, 'age.ran')
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS('R/gam/gam_ran_age_meth.rds')
+  saveRDS('gam_ran_age_meth.rds')
