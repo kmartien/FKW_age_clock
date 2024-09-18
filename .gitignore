@@ -1,6 +1,6 @@
-# Files/paths/patterns for git to ignore 
+# Files/paths/patterns for git to ignore
 # https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 .Rproj.user
-.DS_Store
+^.DS_Store
 .Rhistory
-.Rdata
+^.Rdata

@@ -13,7 +13,7 @@ set.seed(1)
 # Load and format age data ------------------------------------------------
 
 crc.data <- read.csv(
-  'data/Pseudorca_AgeEstimates_Simplified_2024FEBv2.csv',
+  '../data_raw/Pseudorca_AgeEstimates_Simplified_2024FEBv2.csv',
   na.strings = c(NA, 'NA', '')
 ) 
 
@@ -62,7 +62,7 @@ crc.cols <- c(
   "age.best", "age.confidence", "age.min", "age.max", "age.class", "pair.id"
 )
 conf.map <- read_csv(
-  'data/CRC_confidence_rating_mappings.csv',
+  '../data_raw/CRC_confidence_rating_mappings.csv',
   name_repair = 'minimal',
   show_col_types = FALSE
 ) |> 
@@ -141,8 +141,8 @@ conf.colors[5] <- 'gray40'
 
 # Load and format methylation data ----------------------------------------
 
-load("data/Pcra.epi.data.for.Eric.Rdata")
-load("data/res.sum.Rdata")
+load("../data_raw/Pcra.epi.data.for.Eric.Rdata")
+load("../data_raw/res.sum.Rdata")
 
 epi.df <- do.call(
   rbind,
@@ -492,7 +492,7 @@ df <- logit.meth.normal.params |>
   mutate(age.confidence = factor(age.confidence))
 
 graphics.off()
-pdf('results/summary - logit meth by age.pdf')
+pdf('summary - logit meth by age.pdf')
 for(i in sort(sites.to.keep)) {
   g <- df |> 
     filter(loc.site == i) |> 
