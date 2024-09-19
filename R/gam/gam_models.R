@@ -22,8 +22,9 @@ model.df <- age.df |>
     by = 'swfsc.id'
   ) 
 
-nrep <- 100
+nrep <- 5000
 ncores <- 10
+
 
 # Best age and methylation estimates --------------------------------------
 
