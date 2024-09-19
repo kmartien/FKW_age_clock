@@ -3,7 +3,38 @@ library(tidyverse)
 library(randomForest)
 library(rfPermute)
 
-load("R/age_and_methylation_data.rdata")
+load("data/age_and_methylation_data.rdata")
+
+#' run randomForest over sampsize and mtry grid 
+#' and report deviance stats
+rf.param.grid.search <- function(model.df, sites){
+  # grid of sampsize and mtry to optimize MSE over
+  params <- expand.grid(
+    sampsize = seq(round(nrow(model.df)*.3), round(nrow(model.df)*.7), by = 1), 
+    mtry = seq(round(length(sites)*.1), round(length(sites)*.5), by = 1), 
+    KEEP.OUT.ATTRS = FALSE
+  )
+  
+  parallel::mclapply(1:nrow(params), function(i){
+    rf <- randomForest(
+      y = model.df$age.best,
+      x = model.df[, sites.to.keep],
+      mtry = params$mtry[i],
+      ntree = 10000,
+      sampsize = params$sampsize[i],
+      replace = FALSE
+    )
+    data.frame( 
+      sampsize = params$sampsize[i],
+      mtry = params$mtry[i],
+      mse = rf$mse[length(rf$mse)],
+      rsq = rf$rsq[length(rf$rsq)],
+      pct.var = 100 * rf$rsq[length(rf$rsq)]
+    )
+  }, mc.cores = 6) |> 
+    bind_rows() |> 
+    as.data.frame()
+}
 
 model.df <- age.df |>
   filter(swfsc.id %in% ids.to.keep) |>
@@ -17,36 +48,8 @@ model.df <- age.df |>
   column_to_rownames('swfsc.id') |> 
   mutate(inv.var = 1 / age.var)
 
-# grid of sampsize and mtry to optimize MSE over
-params <- expand.grid(
-  sampsize = seq(30, 65, by = 1), 
-  mtry = seq(40, 70, by = 1), 
-  KEEP.OUT.ATTRS = FALSE
-)
-
-#' run inverse variance weighted randomForest over sampsize and mtry grid 
-#' and report deviance stats
-param.df <- parallel::mclapply(1:nrow(params), function(i){
-  rf <- randomForest(
-    y = model.df$age.best,
-    x = model.df[, sites.to.keep],
-    mtry = params$mtry[i],
-    ntree = 10000,
-    weights = model.df$inv.var,
-    sampsize = params$sampsize[i],
-    replace = FALSE
-  )
-  data.frame( 
-    sampsize = params$sampsize[i],
-    mtry = params$mtry[i],
-    mse = rf$mse[length(rf$mse)],
-    rsq = rf$rsq[length(rf$rsq)],
-    pct.var = 100 * rf$rsq[length(rf$rsq)]
-  )
-}, mc.cores = 6) |> 
-  bind_rows() |> 
-  as.data.frame()
-save(param.df, file = "R/random forest/RF.grid.search.rda")
+param.df  <- rf.param.grid.search(model.df, sites.to.keep)
+save(param.df, file = "R/random forest/RF.Allsamps.Allsites.grid.search.rda")
 
 # plot heatmap of MSE across grid
 param.df |> 
@@ -54,15 +57,20 @@ param.df |>
   geom_tile(aes(sampsize, mtry, fill = mse)) +
   scale_fill_distiller(palette = 'RdYlBu', direction = 1)
 
+rf.params <- list()
+rf.params$Allsites <- filter(param.df, mse == min(param.df$mse)) |>
+  select(c(mtry, sampsize))
+#rf.params$Allsites$mtry <- 60
+#rf.params$Allsites$sampsize <- 35
+save(rf.params, file = 'R/random forest/rf_optim_params_Allsamps.rda')
 
-# run inverse variance weighted rfPermute at sampsize and mtry with minimum MSE
+# run rfPermute at sampsize and mtry with minimum MSE
 rp <- rfPermute(
   y = model.df$age.best,
   x = model.df[, sites.to.keep],
-  mtry = 55,
+  mtry = rf.params$Allsites$mtry,
   ntree = 20000,
-  weights = model.df$inv.var,
-  sampsize = 46,
+  sampsize = rf.params$Allsites$sampsize,
   importance = TRUE,
   replace = FALSE,
   num.rep = 1000,
@@ -70,7 +78,6 @@ rp <- rfPermute(
 )
 
 save.image('R/random forest/rf_model_all.rdata')
-
 
 # save site importance scores and p-values
 rp |> 
@@ -82,9 +89,27 @@ rp |>
     pval = '%IncMSE.pval'
   ) |> 
   select(loc.site, incMSE, pval) |> 
-  saveRDS('R/random forest/rf_site_importance.rds')
+  saveRDS('R/random forest/rf_site_importance_Allsamps.rds')
 
+# select important sites from Random Forest
+sites <- readRDS('R/random forest/rf_site_importance_Allsamps.rds') |> 
+  filter(pval <= 0.1) |> 
+  pull('loc.site')
 
+param.df  <- rf.param.grid.search(model.df, sites)
+save(param.df, file = "R/random forest/RF.Allsamps.RFsites.grid.search.rda")
+
+# plot heatmap of MSE across grid
+param.df |> 
+  ggplot() +
+  geom_tile(aes(sampsize, mtry, fill = mse)) +
+  scale_fill_distiller(palette = 'RdYlBu', direction = 1)
+
+rf.params$RFsites <- filter(param.df, mse == min(param.df$mse)) |>
+  select(c(mtry, sampsize))
+#rf.params$RFsites$mtry <- 19
+#rf.params$RFsites$sampsize <- 62
+save(rf.params, file = 'R/random forest/rf_optim_params_Allsamps.rda')
 
 # model diagnostics
 print(rp)
