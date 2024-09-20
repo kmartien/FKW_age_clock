@@ -1,15 +1,15 @@
-rm(list = ls())
 library(tidyverse)
-load("R/data/age_and_methylation_data.rdata")
+load("data/age_and_methylation_data.rdata")
 
-sites.2.use <- "All" #"All" or "RFsites"
+sites.2.use <- 'RFsites' #'Allsites' or 'RFsites'
+samps.2.use <- 'Allsamps'
 
 pred <- bind_rows(
-  readRDS(paste0('R/svm/svm_best_', sites.2.use, '.rds')) |> 
+  readRDS(paste0('R/svm/svm_best_', samps.2.use, '_', sites.2.use, '.rds')) |> 
     mutate(type = 'best'),
-  readRDS(paste0('R/svm/svm_ran_age_', sites.2.use, '.rds')) |> 
+  readRDS(paste0('R/svm/svm_ran_age_', samps.2.use, '_', sites.2.use, '.rds')) |> 
     mutate(type = 'ran.age'),
-  readRDS(paste0('R/svm/svm_ran_age_meth_', sites.2.use, '.rds')) |> 
+  readRDS(paste0('R/svm/svm_ran_age_meth_', samps.2.use, '_', sites.2.use, '.rds')) |> 
     mutate(type = 'ran.age.meth')
 ) 
 
@@ -27,7 +27,7 @@ errSmry <- function(df) {
     )
 }
 
-pdf(file = paste0('R/svm/svm_', sites.2.use, '_summary.pdf'))
+pdf(file = paste0('R/svm/svm_', samps.2.use, '_', sites.2.use, '_summary.pdf'))
 smry <- pred |> 
   left_join(
     select(age.df, c(swfsc.id, age.confidence)),
@@ -43,7 +43,7 @@ smry <- pred |>
       mutate(age.confidence = 'All')
   ) |> 
   arrange(type, age.confidence)
-write.csv(smry, file = paste0('R/svm/svm_', sites.2.use, '_summary.csv'))
+write.csv(smry, file = paste0('R/svm/svm_', samps.2.use, '_', sites.2.use, '_summary.csv'))
 
 
 # Squared error distribution ----------------------------------------------

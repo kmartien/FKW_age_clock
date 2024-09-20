@@ -2,21 +2,27 @@ library(tidyverse)
 library(mgcv)
 library(e1071)
 source('R/misc_funcs.R')
-load("R/data/age_and_methylation_data.rdata")
+load('data/age_and_methylation_data.rdata')
+load('R/svm/svm.tuning.rda')
 
-sites.2.use <- "All" #"All" or "RFsites"
+minCR <- 2
+sites.2.use <- 'RFsites' #'All' or 'RFsites'
+nrep <- 1000
+ncores <- 10
+
+samps.2.use <- ifelse(minCR == 2, 'Allsamps', 'CR4_5')
+svm.params <- svm.tuning[[samps.2.use]][[sites.2.use]]$best.parameters
 
 sites <- sites.to.keep
-if(sites.2.use == "RFsites"){
+if(sites.2.use == 'RFsites'){
   # select important sites from Random Forest
-  sites <- readRDS('R/random forest/rf_site_importance.rds') |> 
+  sites <- readRDS(paste0('R/random forest/rf_site_importance_', 'CR4&5', '.rds')) |> 
     filter(pval <= 0.1) |> 
     pull('loc.site')
 }
 
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)
-
 model.df <- age.df |> 
   left_join(
     logit.meth.normal.params |> 
@@ -25,25 +31,12 @@ model.df <- age.df |>
     by = 'swfsc.id'
   ) 
 
-nrep <- 1000
-ncores <- 10
+train.df <- filter(model.df, age.confidence %in% 4:5)
 
 # Best age and methylation estimates --------------------------------------
 
-train.df <- filter(model.df, age.confidence %in% 4:5)
-# tune.obj <- tune(svm, 
-#                  age.best ~ .,
-#                  data = select(train.df, c(age.best, all_of(sites))),
-#                  ranges = list(
-#                    cost = 10^(seq(-4, 5, 0.1)),
-#                    gamma = 10^(seq(-5, 4, 0.1))),
-#                  tunecontrol = tune.control(sampling = "cross"),
-#                  cross = 10)
-#save(tune.obj, file = paste0("R/Eric_code/svm/tune.obj.", sites.2.use, ".rda"))
-load(paste0("R/svm/tune.obj.", sites.2.use, ".rda"))
-
-predictAllIDsSVM(train.df, model.df, sites, 'age.best', tune.obj) |> 
-  saveRDS(paste0('R/svm/svm_best_', sites.2.use, '.rds'))
+predictAllIDsSVM(train.df, model.df, sites, 'age.best', svm.params) |> 
+  saveRDS(paste0('R/svm/svm_best_', samps.2.use, '_', sites.2.use, '.rds'))
 
 
 # Random age and best methylation estimates -------------------------------
@@ -58,10 +51,10 @@ parallel::mclapply(1:nrep, function(j) {
     )
   
   train.df <- filter(ran.df, age.confidence %in% 4:5)
-  predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', tune.obj)
+  predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', svm.params)
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS(paste0('R/svm/svm_ran_age_', sites.2.use, '.rds'))
+  saveRDS(paste0('R/svm/svm_ran_age_', samps.2.use, '_', sites.2.use, '.rds'))
 
 
 # Random age and random methylation estimates -----------------------------
@@ -71,7 +64,7 @@ parallel::mclapply(1:nrep, function(j) {
   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params) 
   
   train.df <- filter(ran.df, age.confidence %in% 4:5)
-  predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', tune.obj)
+  predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', svm.params)
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS(paste0('R/svm/svm_ran_age_meth_', sites.2.use, '.rds'))
+  saveRDS(paste0('R/svm/svm_ran_age_meth_', samps.2.use, '_', sites.2.use, '.rds'))
