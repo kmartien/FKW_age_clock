@@ -3,7 +3,7 @@ library(glmnet)
 load("data/age_and_methylation_data.rdata")
 
 site.incl.threshold <- 0.8
-nrep <- 10
+nrep <- 1000
 
 model.df <- age.df |>
   filter(swfsc.id %in% ids.to.keep) |>
@@ -51,7 +51,7 @@ glmnet.optim <- lapply(c(2,4), function(minCR){
     lower = 0.0001,
     upper = 0.5,
     df = train.df,
-    nrep = 10
+    nrep = 1000
   )
   optimum.alpha
   
@@ -72,8 +72,6 @@ names(glmnet.optim) <- c('minCR2', 'minCR4')
 
 lapply(glmnet.optim, function(i){i$optimum.alpha}) |>
   saveRDS(file = 'R/glmnet/optimum.alpha.rds')
-
-save.image('R/glmnet/glmnet_tune_alpha.rdata')
 
 glmnet.chosen.sites <- lapply(glmnet.optim, function(minCR){
   do.call(bind_rows,
