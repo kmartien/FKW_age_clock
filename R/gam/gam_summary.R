@@ -1,15 +1,24 @@
 rm(list = ls())
 library(tidyverse)
-load("../age_and_methylation_data.rdata")
+load("../../data/age_and_methylation_data.rdata")
 
 pred <- bind_rows(
-  readRDS('gam_best.rds') |> 
+  readRDS('gam_best_Allsamps.rds') |> 
     mutate(type = 'best'),
-  readRDS('gam_ran_age.rds') |> 
+  readRDS('gam_ran_age_Allsamps.rds') |> 
     mutate(type = 'ran.age'),
-  readRDS('gam_ran_age_meth.rds') |> 
+  readRDS('gam_ran_age_meth_Allsamps.rds') |> 
     mutate(type = 'ran.age.meth')
 ) 
+
+# pred <- bind_rows(
+#   readRDS('gam_best_CR4and5.rds') |>
+#     mutate(type = 'best'),
+#   readRDS('gam_ran_age_CR4and5.rds') |>
+#     mutate(type = 'ran.age'),
+#   readRDS('gam_ran_age_meth_CR4and5.rds') |>
+#     mutate(type = 'ran.age.meth')
+# )
 
 errSmry <- function(df) {
   df |> 
