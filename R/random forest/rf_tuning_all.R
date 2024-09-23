@@ -48,17 +48,18 @@ model.df <- age.df |>
   column_to_rownames('swfsc.id') |> 
   mutate(inv.var = 1 / age.var)
 
-param.df  <- rf.param.grid.search(model.df, sites.to.keep)
-save(param.df, file = "R/random forest/RF.Allsamps.Allsites.grid.search.rda")
+param.df <- list()
+param.df$Allsites  <- rf.param.grid.search(model.df, sites.to.keep)
+save(param.df, file = "R/random forest/RF.Allsamps.grid.search.rda")
 
 # plot heatmap of MSE across grid
-param.df |> 
+param.df$Allsites |> 
   ggplot() +
   geom_tile(aes(sampsize, mtry, fill = mse)) +
   scale_fill_distiller(palette = 'RdYlBu', direction = 1)
 
 rf.params <- list()
-rf.params$Allsites <- filter(param.df, mse == min(param.df$mse)) |>
+rf.params$Allsites <- filter(param.df$Allsites, mse == min(param.df$Allsites$mse)) |>
   select(c(mtry, sampsize))
 #rf.params$Allsites$mtry <- 60
 #rf.params$Allsites$sampsize <- 35
@@ -77,8 +78,6 @@ rp <- rfPermute(
   num.cores = 10
 )
 
-save.image('R/random forest/rf_model_all.rdata')
-
 # save site importance scores and p-values
 rp |> 
   importance() |> 
@@ -96,16 +95,16 @@ sites <- readRDS('R/random forest/rf_site_importance_Allsamps.rds') |>
   filter(pval <= 0.1) |> 
   pull('loc.site')
 
-param.df  <- rf.param.grid.search(model.df, sites)
-save(param.df, file = "R/random forest/RF.Allsamps.RFsites.grid.search.rda")
+param.df$RFsites  <- rf.param.grid.search(model.df, sites)
+save(param.df, file = "R/random forest/RF.Allsamps.grid.search.rda")
 
 # plot heatmap of MSE across grid
-param.df |> 
+param.df$RFsites |> 
   ggplot() +
   geom_tile(aes(sampsize, mtry, fill = mse)) +
   scale_fill_distiller(palette = 'RdYlBu', direction = 1)
 
-rf.params$RFsites <- filter(param.df, mse == min(param.df$mse)) |>
+rf.params$RFsites <- filter(param.df$RFsites, mse == min(param.df$RFsites$mse)) |>
   select(c(mtry, sampsize))
 #rf.params$RFsites$mtry <- 19
 #rf.params$RFsites$sampsize <- 62
