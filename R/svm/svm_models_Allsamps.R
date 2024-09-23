@@ -5,7 +5,7 @@ source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 load('R/svm/svm.tuning.rda')
 
-sites.2.use <- 'Allsites' #'Allsites' or 'RFsites'
+sites.2.use <- 'RFsites' #'Allsites' or 'RFsites'
 nrep <- 1000
 ncores <- 10
 
@@ -14,8 +14,8 @@ svm.params <- svm.tuning$Allsamps[[sites.2.use]]$best.parameters
 sites <- sites.to.keep
 if(sites.2.use == 'RFsites'){
   # select important sites from Random Forest
-  sites <- readRDS('R/random forest/rf_site_importance_Allsites.rds') |> 
-    filter(pval <= 0.1) |> 
+  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |> 
+    filter(pval <= 0.05) |> 
     pull('loc.site')
 }
 
