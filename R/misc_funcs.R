@@ -182,12 +182,12 @@ predictAllIDsGAM <- function(train.df, model.df, sites, resp) {
   ) 
 }
 
-fitTrainSVM <- function(df, sites, resp, tune.obj) {
+fitTrainSVM <- function(df, sites, resp, svm.params) {
   fit <- svm(
     formula = as.formula(paste0(resp, ' ~ .')), 
     data = select(df, c(resp, all_of(sites))),
-    cost = tune.obj$best.parameters$cost,
-    gamma = tune.obj$best.parameters$gamma)
+    cost = svm.params$cost,
+    gamma = svm.params$gamma)
 }
 
 
@@ -211,16 +211,16 @@ predictTestSVM <- function(fit, cv.df, sites, resp){
     )
 }
 
-predictAllIDsSVM <- function(train.df, model.df, sites, resp, tune.obj) {
+predictAllIDsSVM <- function(train.df, model.df, sites, resp, svm.params) {
   rbind( 
     # cross-validation model for CR 4 & 5
     lapply(train.df$swfsc.id, function(cv.id) {
-      fitTrainSVM(filter(train.df, swfsc.id != cv.id), sites, resp, tune.obj) |> 
+      fitTrainSVM(filter(train.df, swfsc.id != cv.id), sites, resp, svm.params) |> 
         predictTestSVM(filter(model.df, swfsc.id == cv.id), sites, resp)
     }) |> 
       bind_rows(),
     # full CR 4 & 5 model to predict CR 2 & 3
-    fitTrainSVM(train.df, sites, resp, tune.obj) |> 
+    fitTrainSVM(train.df, sites, resp, svm.params) |> 
       predictTestSVM(filter(model.df, age.confidence %in% 2:3), sites, resp)
   ) 
 }
@@ -267,8 +267,7 @@ fitTrainENR <- function(df, sites, resp, alpha) {
   fit <- cv.glmnet(
     x = as.matrix(df[, sites]),
     y = df$resp,
-    alpha = alpha,
-    foldid = 1:nrow(df)
+    alpha = alpha
   ) 
 }
 
@@ -297,13 +296,13 @@ predictAllIDsENR <- function(train.df, model.df, sites, resp, tune.obj) {
   rbind( 
     # cross-validation model for CR 4 & 5
     lapply(train.df$swfsc.id, function(cv.id) {
-      fitTrainSVM(filter(train.df, swfsc.id != cv.id), sites, resp, tune.obj) |> 
-        predictTestSVM(filter(model.df, swfsc.id == cv.id), sites, resp)
+      fitTrainENR(filter(train.df, swfsc.id != cv.id), sites, resp, tune.obj) |> 
+        predictTestENR(filter(model.df, swfsc.id == cv.id), sites, resp)
     }) |> 
       bind_rows(),
     # full CR 4 & 5 model to predict CR 2 & 3
-    fitTrainSVM(train.df, sites, resp, tune.obj) |> 
-      predictTestSVM(filter(model.df, age.confidence %in% 2:3), sites, resp)
+    fitTrainENR(train.df, sites, resp, tune.obj) |> 
+      predictTestENR(filter(model.df, age.confidence %in% 2:3), sites, resp)
   ) 
 }
 
