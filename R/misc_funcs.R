@@ -202,9 +202,11 @@ predictTestSVM <- function(fit, cv.df, sites, resp){
   tibble(
     swfsc.id = cv.df$swfsc.id,
     age.resp = cv.df[[resp]],
-    age.pred = unname(ifelse(pred < 0, 0, pred)),
+    age.pred = unname(pred),
   ) |> 
     mutate(
+      age.pred = ifelse(age.pred < 0, 0, age.pred),
+      age.pred = ifelse(age.pred > 80, 80, age.pred),
       resid = age.pred - age.resp,
       dev = abs(resid),
       sq.err = resid ^ 2
@@ -229,8 +231,6 @@ predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params) {
   fit <- randomForest(
     formula = as.formula(paste0(resp, ' ~ .')), 
     data = select(train.df, c(resp, all_of(sites))),
-    #y = train.df$resp,
-    #x = select(train.df, all_of(sites)),
     mtry = rf.params$mtry,
     ntree = 10000,
     sampsize = rf.params$sampsize,
@@ -252,6 +252,8 @@ predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params) {
     ),
     # full CR 4 & 5 model to predict CR 2 & 3
     tibble(
+      age.pred = ifelse(age.pred < 0, 0, age.pred),
+      age.pred = ifelse(age.pred > 80, 80, age.pred),
       swfsc.id = test.df$swfsc.id,
       age.resp = test.df[[resp]],
       age.pred = pred,
@@ -266,7 +268,7 @@ predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params) {
 fitTrainENR <- function(df, sites, resp, alpha) {
   fit <- cv.glmnet(
     x = as.matrix(df[, sites]),
-    y = df$resp,
+    y = df[,resp],
     alpha = alpha
   ) 
 }
@@ -276,32 +278,34 @@ predictTestENR <- function(fit, cv.df, sites, resp){
   
   pred <- predict(
     fit, 
-    select(cv.df, all_of(sites)),
-    s = 'lambda.1se'
+    as.matrix(cv.df[, sites]),
+    s = 'lambda.min'
   )
   
   tibble(
     swfsc.id = cv.df$swfsc.id,
     age.resp = cv.df[[resp]],
-    age.pred = unname(ifelse(pred < 0, 0, pred)),
+    age.pred = pred[1],
   ) |> 
     mutate(
+      age.pred = ifelse(age.pred < 0, 0, age.pred),
+      age.pred = ifelse(age.pred > 80, 80, age.pred),
       resid = age.pred - age.resp,
       dev = abs(resid),
       sq.err = resid ^ 2
     )
 }
 
-predictAllIDsENR <- function(train.df, model.df, sites, resp, tune.obj) {
+predictAllIDsENR <- function(train.df, model.df, sites, resp, alpha) {
   rbind( 
     # cross-validation model for CR 4 & 5
     lapply(train.df$swfsc.id, function(cv.id) {
-      fitTrainENR(filter(train.df, swfsc.id != cv.id), sites, resp, tune.obj) |> 
+      fitTrainENR(filter(train.df, swfsc.id != cv.id), sites, resp, alpha) |> 
         predictTestENR(filter(model.df, swfsc.id == cv.id), sites, resp)
     }) |> 
       bind_rows(),
     # full CR 4 & 5 model to predict CR 2 & 3
-    fitTrainENR(train.df, sites, resp, tune.obj) |> 
+    fitTrainENR(train.df, sites, resp, alpha) |> 
       predictTestENR(filter(model.df, age.confidence %in% 2:3), sites, resp)
   ) 
 }
