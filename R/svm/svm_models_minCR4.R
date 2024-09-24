@@ -34,7 +34,7 @@ train.df <- filter(model.df, age.confidence %in% 4:5)
 # Best age and methylation estimates --------------------------------------
 
 predictAllIDsSVM(train.df, model.df, sites, 'age.best', svm.params) |> 
-  saveRDS(paste0('R/svm/svm_best_CR4_5_', sites.2.use,'.rds'))
+  saveRDS(paste0('R/svm/svm_best_minCR4_', sites.2.use,'.rds'))
 
 
 # Random age and best methylation estimates -------------------------------
@@ -52,7 +52,7 @@ parallel::mclapply(1:nrep, function(j) {
   predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', svm.params)
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS(paste0('R/svm/svm_ran_age_CR4_5_', sites.2.use, '.rds'))
+  saveRDS(paste0('R/svm/svm_ran_age_minCR4_', sites.2.use, '.rds'))
 
 
 # Random age and random methylation estimates -----------------------------
@@ -65,4 +65,4 @@ parallel::mclapply(1:nrep, function(j) {
   predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', svm.params)
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS(paste0('R/svm/svm_ran_age_meth_CR4_5_', sites.2.use, '.rds'))
+  saveRDS(paste0('R/svm/svm_ran_age_meth_minCR4_', sites.2.use, '.rds'))
