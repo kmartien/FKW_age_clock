@@ -1,24 +1,16 @@
-rm(list = ls())
 library(tidyverse)
-load("../../data/age_and_methylation_data.rdata")
+load('data/age_and_methylation_data.rdata')
 
-pred <- bind_rows(
-  readRDS('gam_best_Allsamps.rds') |> 
-    mutate(type = 'best'),
-  readRDS('gam_ran_age_Allsamps.rds') |> 
-    mutate(type = 'ran.age'),
-  readRDS('gam_ran_age_meth_Allsamps.rds') |> 
-    mutate(type = 'ran.age.meth')
-) 
+sites.2.use <- 'RFsites'
+minCR <- 4
 
-# pred <- bind_rows(
-#   readRDS('gam_best_CR4and5.rds') |>
-#     mutate(type = 'best'),
-#   readRDS('gam_ran_age_CR4and5.rds') |>
-#     mutate(type = 'ran.age'),
-#   readRDS('gam_ran_age_meth_CR4and5.rds') |>
-#     mutate(type = 'ran.age.meth')
-# )
+pred <- lapply(c('svm', 'rf'), function(m){
+  res.path <- file.path('R', m, m)
+  readRDS(paste0(res.path, '_best_minCR', minCR, '_', sites.2.use, '.rds')) |> 
+    mutate(type = 'best') |>
+    mutate(method = m)
+}) |>
+  bind_rows()
 
 errSmry <- function(df) {
   df |> 
@@ -38,7 +30,7 @@ errSmry <- function(df) {
 smry <- pred |> 
   left_join(age.df, by = 'swfsc.id') |> 
   mutate(age.confidence = as.character(age.confidence)) |> 
-  group_by(type, age.confidence) |> 
+  group_by(method, type, age.confidence) |> 
   errSmry() |> 
   bind_rows(
     pred |> 
@@ -50,72 +42,17 @@ smry <- pred |>
   arrange(type, age.confidence)
 print(smry)
 
-
-# Squared error distribution ----------------------------------------------
-
-pred |> 
-  left_join(age.df, by = 'swfsc.id') |> 
-  mutate(age.confidence = factor(age.confidence)) |> 
-  ggplot() +
-  geom_histogram(aes(sq.err, fill = age.confidence)) +
-  scale_fill_manual(values = conf.colors) +
-  scale_x_log10() +
-  facet_grid(type ~ age.confidence, scales = 'free') + 
-  theme(legend.position = 'top')
-
-
-# Distribution of predictions by ID ---------------------------------------
-
-pred |> 
-  filter(type == 'best') |> 
-  ggplot() + 
-  geom_histogram(aes(x = age.pred)) +
-  labs(x = 'GAM predicted age', title = 'best')
-
-pred |> 
-  filter(type == 'ran.age') |>
-  left_join(age.df, by = 'swfsc.id') |>
-  mutate(age.confidence = factor(age.confidence)) |> 
-  ggplot() + 
-  geom_histogram(aes(x = age.pred, fill = age.confidence)) +
-  geom_vline(
-    aes(xintercept = median), 
-    data = pred |> 
-      filter(type == 'ran.age') |> 
-      group_by(swfsc.id) |> 
-      summarize(median = median(age.pred), .groups = 'drop') 
-  ) +
-  facet_wrap(~ swfsc.id, scales = 'free_y') +
-  scale_fill_manual(values = conf.colors) +
-  labs(x = 'GAM predicted age', title = 'ran.age') +
-  theme(legend.position = 'none')
-
-pred |> 
-  filter(type == 'ran.age.meth') |> 
-  left_join(age.df, by = 'swfsc.id') |>
-  mutate(age.confidence = factor(age.confidence)) |> 
-  ggplot() + 
-  geom_histogram(aes(x = age.pred, fill = age.confidence)) + 
-  geom_vline(
-    aes(xintercept = median), 
-    data = pred |> 
-      filter(type == 'ran.age.meth') |> 
-      group_by(swfsc.id) |> 
-      summarize(median = median(age.pred), .groups = 'drop') 
-  ) +
-  facet_wrap(~ swfsc.id, scales = 'free_y') +
-  scale_fill_manual(values = conf.colors) +
-  labs(x = 'GAM predicted age', title = 'ran.age.meth') +
-  theme(legend.position = 'none')
-
-
 # Distribution of residuals by ID -----------------------------------------
 
 pred |> 
   filter(type == 'best') |> 
+  left_join(age.df, by = 'swfsc.id') |>
+  mutate(age.confidence = factor(age.confidence)) |> 
   ggplot() + 
-  geom_histogram(aes(x = resid)) +
-  labs(x = 'Residuals', title = 'best')
+  geom_histogram(aes(x = resid, fill = age.confidence)) +
+  scale_fill_manual(values = conf.colors) +
+  labs(x = 'Residuals', title = 'best') +
+  facet_wrap(~method)
 
 pred |> 
   filter(type == 'ran.age') |>
@@ -171,7 +108,7 @@ pred |>
   geom_segment(aes(x = age.min, xend = age.max, y = age.pred, yend = age.pred, color = age.confidence), alpha = 0.5) +
   geom_point(aes(x = age.best, y = age.pred, color = age.confidence), size = 3) +
   scale_color_manual(values = conf.colors) +
-  labs(x = 'CRC age', y = 'GAM predicted age') +
+  labs(x = 'CRC age', y = paste0(method, ' predicted age')) +
   facet_grid(age.confidence ~ type) +
   theme(legend.position = 'none')
 

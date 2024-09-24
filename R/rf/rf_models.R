@@ -5,6 +5,8 @@ library(randomForest)
 source('R/misc_funcs.R')
 load("R/data/age_and_methylation_data.rdata")
 
+minCR <- 4
+
 sites.2.use <- "All" #"All" or "RFsites"
 load(paste0('R/random forest/rf_optim_params_CR4&5_', sites.2.use, '.rda'))
 #rf.params <- tibble(mtry = floor(length(sites)/3), sampsize = floor(50 * 0.632)) 
@@ -33,9 +35,9 @@ ncores <- 10
 
 # Best age and methylation estimates --------------------------------------
 
-train.df <- filter(model.df, age.confidence %in% 4:5)
+train.df <- filter(model.df, age.confidence <= minCR)
 predictAllIDsRF(train.df, model.df, sites, 'age.best', rf.params) |> 
-  saveRDS(paste0('R/random forest/rf_best_', sites.2.use, '.rds'))
+  saveRDS(paste0('R/random forest/rf_best_minCR', minCR, '_', sites.2.use, '.rds'))
 
 
 # Random age and best methylation estimates -------------------------------
@@ -53,7 +55,7 @@ parallel::mclapply(1:nrep, function(j) {
   predictAllIDsRF(train.df, ran.df, sites, 'age.ran', rf.params)
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS(paste0('R/random forest/rf_ran_age_', sites.2.use, '.rds'))
+  saveRDS(paste0('R/random forest/rf_ran_age_minCR', minCR, '_', sites.2.use, '.rds'))
 
 
 # Random age and random methylation estimates -----------------------------
@@ -66,4 +68,4 @@ parallel::mclapply(1:nrep, function(j) {
   predictAllIDsRF(train.df, ran.df, sites, 'age.ran', rf.params)
 }, mc.cores = ncores) |> 
   bind_rows() |> 
-  saveRDS(paste0('R/random forest/rf_ran_age_meth_', sites.2.use, '.rds'))
+  saveRDS(paste0('R/random forest/rf_ran_age_meth_minCR', minCR, '_', sites.2.use, '.rds'))

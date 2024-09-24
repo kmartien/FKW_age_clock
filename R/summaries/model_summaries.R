@@ -1,24 +1,20 @@
-rm(list = ls())
 library(tidyverse)
-load("../../data/age_and_methylation_data.rdata")
+load('data/age_and_methylation_data.rdata')
+
+sites.2.use <- 'Allsites'
+minCR <- 4
+
+method <- 'glmnet'
+res.path <- file.path('R', method, method)
 
 pred <- bind_rows(
-  readRDS('gam_best_Allsamps.rds') |> 
-    mutate(type = 'best'),
-  readRDS('gam_ran_age_Allsamps.rds') |> 
-    mutate(type = 'ran.age'),
-  readRDS('gam_ran_age_meth_Allsamps.rds') |> 
-    mutate(type = 'ran.age.meth')
-) 
-
-# pred <- bind_rows(
-#   readRDS('gam_best_CR4and5.rds') |>
-#     mutate(type = 'best'),
-#   readRDS('gam_ran_age_CR4and5.rds') |>
-#     mutate(type = 'ran.age'),
-#   readRDS('gam_ran_age_meth_CR4and5.rds') |>
-#     mutate(type = 'ran.age.meth')
-# )
+  readRDS(paste0(res.path, '_best_minCR', minCR, '_Allsites.rds')) |>
+    mutate(type = paste0(method, '_best')),
+  readRDS(paste0(res.path, '_ran_age_minCR', minCR, '_Allsites.rds')) |>
+    mutate(type = paste0(method, 'ran.age')),
+  readRDS(paste0(res.path, '_ran_age_meth_minCR', minCR, '_Allsites.rds')) |>
+    mutate(type = paste0(method, 'ran.age.meth'))
+)
 
 errSmry <- function(df) {
   df |> 
@@ -70,7 +66,7 @@ pred |>
   filter(type == 'best') |> 
   ggplot() + 
   geom_histogram(aes(x = age.pred)) +
-  labs(x = 'GAM predicted age', title = 'best')
+  labs(x = paste0(method, ' predicted age'), title = 'best')
 
 pred |> 
   filter(type == 'ran.age') |>
@@ -87,7 +83,7 @@ pred |>
   ) +
   facet_wrap(~ swfsc.id, scales = 'free_y') +
   scale_fill_manual(values = conf.colors) +
-  labs(x = 'GAM predicted age', title = 'ran.age') +
+  labs(x = paste0(method, ' predicted age'), title = 'ran.age') +
   theme(legend.position = 'none')
 
 pred |> 
@@ -105,7 +101,7 @@ pred |>
   ) +
   facet_wrap(~ swfsc.id, scales = 'free_y') +
   scale_fill_manual(values = conf.colors) +
-  labs(x = 'GAM predicted age', title = 'ran.age.meth') +
+  labs(x = paste0(method, ' predicted age'), title = 'ran.age.meth') +
   theme(legend.position = 'none')
 
 
@@ -113,8 +109,11 @@ pred |>
 
 pred |> 
   filter(type == 'best') |> 
+  left_join(age.df, by = 'swfsc.id') |>
+  mutate(age.confidence = factor(age.confidence)) |> 
   ggplot() + 
-  geom_histogram(aes(x = resid)) +
+  geom_histogram(aes(x = resid, fill = age.confidence)) +
+  scale_fill_manual(values = conf.colors) +
   labs(x = 'Residuals', title = 'best')
 
 pred |> 
@@ -171,7 +170,7 @@ pred |>
   geom_segment(aes(x = age.min, xend = age.max, y = age.pred, yend = age.pred, color = age.confidence), alpha = 0.5) +
   geom_point(aes(x = age.best, y = age.pred, color = age.confidence), size = 3) +
   scale_color_manual(values = conf.colors) +
-  labs(x = 'CRC age', y = 'GAM predicted age') +
+  labs(x = 'CRC age', y = paste0(method, ' predicted age')) +
   facet_grid(age.confidence ~ type) +
   theme(legend.position = 'none')
 
