@@ -32,22 +32,22 @@ p.cluster.distribution <- function(dat) {
 # plot loov results by min.CR
 plot.loov.res <- function(loov.res, min.CR) {# expected argument is loov.res
   dat <- filter(loov.res, age.confidence >= min.CR)
-  med.error <- group_by(dat, age.confidence) %>% summarise(round(median(abs(error)),2))
-  names(med.error) <- c("CR", "MAE")
+  med.dev <- group_by(dat, age.confidence) %>% summarise(round(median(dev),2))
+  names(med.dev) <- c("CR", "median.dev")
   loov.regress <- do.call(rbind,lapply(min.CR:5, function(cr){
     dat.filtered <- filter(dat, age.confidence == cr)
-    regr <- lm(predicted.age~age.best, data = dat.filtered)$coefficients
+    regr <- lm(age.pred~age.best, data = dat.filtered)$coefficients
     names(regr) <- c("intercept", "slope")
     
-    cor.coeff <- round(cor.test(dat.filtered$age.best, dat.filtered$predicted.age, method = "pearson")$estimate,2)
+    cor.coeff <- round(cor.test(dat.filtered$age.best, dat.filtered$age.pred, method = "pearson")$estimate,2)
     return(c(cor.coeff, regr))
   }))
   colnames(loov.regress)[1] <- "Corr"
-  fit.sum <- bind_cols(med.error, loov.regress)
+  fit.sum <- bind_cols(med.dev, loov.regress)
   
   p.loov <- ggplot(dat) +
     geom_abline(slope = 1, color = "black", linewidth = 0.5, linetype = 2) +
-    geom_point(aes(x = age.best, y = predicted.age, col = as.character(age.confidence)), size = 3) +
+    geom_point(aes(x = age.best, y = age.pred, col = as.character(age.confidence)), size = 3) +
     annotation_custom(tableGrob(fit.sum[,1:3], theme = ttheme_minimal(base_size = 10), rows = NULL), xmin = 30, xmax = 40, ymin = 0, ymax = 10) +
     scale_color_manual(values = conf.palette, name = "Confidence") +
     ggtitle(paste0("LOOV min CR = ", min.CR)) +
@@ -67,13 +67,12 @@ plot.loov.res <- function(loov.res, min.CR) {# expected argument is loov.res
   return(list(p.loov = p.loov, fit.sum = fit.sum))
 }
 
-# Distribution of deviations for glmnet
+# Distribution of residuals for glmnet
 plot.deviation <- function(dat, min.CR){
-  dat$error <- dat$predicted.age - dat$age.best
   dat$age.range <- dat$age.max - dat$age.min
   dat$age.confidence <- as.character(dat$age.confidence)
   ggplot(filter(dat, age.confidence >= min.CR)) +
-    geom_point(aes(x = error, y = age.range, col = age.confidence)) +
+    geom_point(aes(x = resid, y = age.range, col = age.confidence)) +
     scale_colour_manual(values = conf.palette) +
     labs(x = "Predicted age - CRC age.best", y = "Age.max - age.min") +
     ggtitle(paste0("glmnet Training (CR >=", min.CR, ")")) +
@@ -83,10 +82,9 @@ plot.deviation <- function(dat, min.CR){
     )
 }
 
-# Histogram of age errors from LOOCV results
+# Histogram of age residuals from LOOCV results
 loov.hist <- function(dat, min.cr){ # expected argument is loov.res
-  dat$error <- dat$predicted.age - dat$age.best
-  ggplot(filter(dat, age.confidence >= min.cr), aes(x = error, fill = as.character(age.confidence))) +
+  ggplot(filter(dat, age.confidence >= min.cr), aes(x = resid, fill = as.character(age.confidence))) +
     geom_histogram(bins = 35, binwidth = 1, color = "black") +
     scale_fill_manual(values = conf.palette, name = "Confidence") +
     labs(x = "Predicted age - Age.best", y = "Count") +

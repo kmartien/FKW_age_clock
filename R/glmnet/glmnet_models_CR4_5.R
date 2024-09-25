@@ -1,19 +1,26 @@
 library(tidyverse)
-library(mgcv)
+#library(mgcv)
 library(glmnet)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 
 minCR <- 4
-sites.2.use <- 'Allsites' #'Allsites' or 'RFsites'
+sites.2.use <- 'RFsites' #'Allsites' or 'RFsites'
+age.transform <- 'ln'
 nrep <- 1000
 ncores <- 10
 
 optimum.alpha <- readRDS('R/glmnet/optimum.alpha.rds')$minCR4
 sites <- sites.to.keep
 if(sites.2.use == 'RFsites'){
-  # select important sites from Random Forest
-  sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$minCR4
+  # select important sites from Random Forest tuned with all samples
+  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
+    filter(pval <= 0.05) |>
+    pull('loc.site')
+}
+if(sites.2.use == 'glmnet.sites'){
+  # select chosen sites from glmnet tuned with all samples
+  sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$min2
 }
 
 age.df <- age.df |>  
@@ -31,8 +38,8 @@ train.df <- filter(model.df, age.confidence >= minCR)
 
 # Best age and methylation estimates --------------------------------------
 
-predictAllIDsENR(train.df, model.df, sites, 'age.best', optimum.alpha$par) |> 
-  saveRDS(paste0('R/glmnet/glmnet_best_minCR', minCR, '_', sites.2.use,'.rds'))
+predictAllIDsENR(train.df, model.df, sites, 'age.best', optimum.alpha$par, age.transform) |> 
+  saveRDS(paste0('R/glmnet/glmnet_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '.rds'))
 
 
 # Random age and best methylation estimates -------------------------------

@@ -1,20 +1,28 @@
 library(tidyverse)
 load('data/age_and_methylation_data.rdata')
 
-sites.2.use <- 'Allsites'
+sites.2.use <- 'RFsites'
 minCR <- 4
 
-method <- 'glmnet'
+method <- 'gam'
 res.path <- file.path('R', method, method)
 
 pred <- bind_rows(
-  readRDS(paste0(res.path, '_best_minCR', minCR, '_Allsites.rds')) |>
-    mutate(type = paste0(method, '_best')),
-  readRDS(paste0(res.path, '_ran_age_minCR', minCR, '_Allsites.rds')) |>
-    mutate(type = paste0(method, 'ran.age')),
-  readRDS(paste0(res.path, '_ran_age_meth_minCR', minCR, '_Allsites.rds')) |>
-    mutate(type = paste0(method, 'ran.age.meth'))
+  readRDS(paste0(res.path, '_best_CR4and5.rds')) |>
+    mutate(type = 'best'),
+  readRDS(paste0(res.path, '_ran_age_CR4and5.rds')) |>
+    mutate(type = 'ran.age'),
+  readRDS(paste0(res.path, '_ran_age_meth_CR4and5.rds')) |>
+    mutate(type = 'ran.age.meth')
 )
+# pred <- bind_rows(
+#   readRDS(paste0(res.path, '_best_minCR', minCR, '_', sites.2.use, '.rds')) |>
+#     mutate(type = 'best'),
+#   readRDS(paste0(res.path, '_ran_age_minCR', minCR, '_', sites.2.use, '.rds')) |>
+#     mutate(type = 'ran.age'),
+#   readRDS(paste0(res.path, '_ran_age_meth_minCR', minCR, '_', sites.2.use, '.rds')) |>
+#     mutate(type = 'ran.age.meth')
+# )
 
 errSmry <- function(df) {
   df |> 
@@ -45,10 +53,11 @@ smry <- pred |>
   ) |> 
   arrange(type, age.confidence)
 print(smry)
-
+write.csv(smry, file = paste0('R/summaries/', method, '_minCR', minCR, '_', sites.2.use, '.csv'))
 
 # Squared error distribution ----------------------------------------------
 
+pdf(file = paste0('R/summaries/', method, '_minCR', minCR, '_', sites.2.use, '.pdf'))
 pred |> 
   left_join(age.df, by = 'swfsc.id') |> 
   mutate(age.confidence = factor(age.confidence)) |> 
@@ -197,3 +206,4 @@ pred |>
   facet_grid(age.confidence ~ type, scales = 'free_y') +
   theme(legend.position = 'none')
 
+dev.off()
