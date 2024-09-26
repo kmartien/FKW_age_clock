@@ -116,7 +116,8 @@ sampleAgeMeth <- function(ages, meth, ran.age = FALSE, ran.meth = FALSE) {
 }
 
 # fit GAM model to training data
-fitTrainGAM <- function(train.df, sites, resp) {
+fitTrainGAM <- function(train.df, sites, resp, age.transform) {
+  if (age.transform == 'ln') train.df[[resp]] <- log(train.df[[resp]])
   # run GAM starting at k = 3 until convergence
   fit <- NULL
   for(k in 3:10) {
@@ -137,7 +138,7 @@ fitTrainGAM <- function(train.df, sites, resp) {
 }
 
 # predict testing data from fitted model
-predictTestGAM <- function(fit, test.df, resp){
+predictTestGAM <- function(fit, test.df, resp, age.transform){
   if(is.null(fit)) return(NULL)
   
   pred <- predict(
@@ -146,7 +147,7 @@ predictTestGAM <- function(fit, test.df, resp){
     type = 'response',
     se.fit = TRUE
   )
-  
+
   tibble(
     swfsc.id = test.df$swfsc.id,
     k = fit$k,
@@ -156,10 +157,13 @@ predictTestGAM <- function(fit, test.df, resp){
     uci = unname(pred$fit + (pred$se.fit * qnorm(0.975)))
   ) |> 
     mutate(
+      age.pred = if (age.transform == 'ln') exp(age.pred) else age.pred,
       age.pred = ifelse(age.pred < 0, 0, age.pred),
       age.pred = ifelse(age.pred > 80, 80, age.pred),
+      lci = if (age.transform == 'ln') exp(lci) else lci,
       lci = ifelse(lci < 0, 0, lci),
       lci = ifelse(lci > 80, 80, lci),
+      uci = if (age.transform == 'ln') exp(uci) else uci,
       uci = ifelse(uci < 0, 0, uci),
       uci = ifelse(uci > 80, 80, uci),
       resid = age.pred - age.resp,
@@ -168,17 +172,17 @@ predictTestGAM <- function(fit, test.df, resp){
     )
 }
 
-predictAllIDsGAM <- function(train.df, model.df, sites, resp) {
+predictAllIDsGAM <- function(train.df, model.df, sites, resp, age.transform = 'none') {
   rbind( 
     # cross-validation model for CR 4 & 5
     lapply(train.df$swfsc.id, function(cv.id) {
-      fitTrainGAM(filter(train.df, swfsc.id != cv.id), sites, resp) |> 
-        predictTestGAM(filter(model.df, swfsc.id == cv.id), resp)
+      fitTrainGAM(filter(train.df, swfsc.id != cv.id), sites, resp, age.transform) |> 
+        predictTestGAM(filter(model.df, swfsc.id == cv.id), resp, age.transform)
     }) |> 
       bind_rows(),
     # full CR 4 & 5 model to predict CR 2 & 3
-    fitTrainGAM(train.df, sites, resp) |> 
-      predictTestGAM(filter(model.df, age.confidence %in% 2:3), resp)
+    fitTrainGAM(train.df, sites, resp, age.transform) |> 
+      predictTestGAM(filter(model.df, age.confidence %in% 2:3), resp, age.transform)
   ) 
 }
 
