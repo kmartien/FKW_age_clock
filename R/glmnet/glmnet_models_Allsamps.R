@@ -1,27 +1,26 @@
+rm(list=ls())
 library(tidyverse)
 library(mgcv)
-library(e1071)
+library(glmnet)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
-load('R/svm/svm.tuning.rda')
 
-sites.2.use <- 'Allsites' #'Allsites' or 'RFsites'
+minCR <- 2
+sites.2.use <- 'RFsites' #'Allsites' or 'RFsites'
 age.transform <- 'ln'
 nrep <- 1000
 ncores <- 10
 
-svm.params <- svm.tuning$Allsamps[[sites.2.use]]$best.parameters
-
+optimum.alpha <- readRDS('R/glmnet/optimum.alpha.rds')$minCR2
 sites <- sites.to.keep
 if(sites.2.use == 'RFsites'){
   # select important sites from Random Forest
-  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |> 
-    filter(pval <= 0.05) |> 
-    pull('loc.site')
+  sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$minCR2
 }
 
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)
+
 model.df <- age.df |> 
   left_join(
     logit.meth.normal.params |> 
@@ -32,12 +31,12 @@ model.df <- age.df |>
 
 # Best age and methylation estimates --------------------------------------
 
-# LOO cross validation for all samples
 lapply(model.df$swfsc.id, function(cv.id) {
-  fitTrainSVM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', svm.params, age.transform) |> 
-    predictTestSVM(filter(model.df, swfsc.id == cv.id), sites, 'age.best', age.transform)
-}) |> bind_rows() |>
-  saveRDS(paste0('R/svm/svm_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '.rds'))
+  fitTrainENR(filter(model.df, swfsc.id != cv.id), sites, 'age.best', optimum.alpha$par, age.transform) |> 
+    predictTestENR(filter(model.df, swfsc.id == cv.id), sites, 'age.best', age.transform)
+}) |> 
+  bind_rows() |>
+  saveRDS(paste0('R/glmnet/glmnet_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '.rds'))
 
 
 # # Random age and best methylation estimates -------------------------------
@@ -51,13 +50,15 @@ lapply(model.df$swfsc.id, function(cv.id) {
 #       by = 'swfsc.id'
 #     )
 #   
+#   train.df <- filter(ran.df, age.confidence >= minCR)
 #   lapply(ran.df$swfsc.id, function(cv.id) {
-#     fitTrainSVM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', svm.params) |> 
-#       predictTestSVM(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran')
-#   }) |> bind_rows()
+#     fitTrainENR(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', optimum.alpha$par) |> 
+#       predictTestENR(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran')
+#   }) |> 
+#     bind_rows() 
 # }, mc.cores = ncores) |> 
 #   bind_rows() |> 
-#   saveRDS(paste0('R/svm/svm_ran_age_minCR', minCR, '_', sites.2.use, '_', age.transform, '.rds'))
+#   saveRDS(paste0('R/glmnet/glmnet_ran_age_minCR', minCR, '_', sites.2.use, '.rds'))
 # 
 # 
 # # Random age and random methylation estimates -----------------------------
@@ -65,12 +66,13 @@ lapply(model.df$swfsc.id, function(cv.id) {
 # parallel::mclapply(1:nrep, function(j) {
 #   # random sample of ages and methylation
 #   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params) 
-# 
+#   
+#   train.df <- filter(ran.df, age.confidence >= minCR)
 #   lapply(ran.df$swfsc.id, function(cv.id) {
-#     fitTrainSVM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', svm.params, age.transform) |> 
-#       predictTestSVM(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran', age.transform)
-#   }) |> bind_rows()
+#     fitTrainENR(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', optimum.alpha$par) |> 
+#       predictTestENR(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran')
+#   }) |> 
+#     bind_rows() 
 # }, mc.cores = ncores) |> 
 #   bind_rows() |> 
-#   saveRDS(paste0('R/svm/svm_ran_age_meth_minCR', minCR, '_', sites.2.use, '_', age.transform, '.rds'))
-# 
+#   saveRDS(paste0('R/glmnet/glmnet_ran_age_meth_minCR', minCR, '_', sites.2.use, '.rds'))

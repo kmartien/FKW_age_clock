@@ -215,7 +215,7 @@ predictTestSVM <- function(fit, cv.df, sites, resp, age.transform){
     )
 }
 
-predictAllIDsSVM <- function(train.df, model.df, sites, resp, svm.params, age.transform) {
+predictAllIDsSVM <- function(train.df, model.df, sites, resp, svm.params, age.transform = 'none') {
   rbind( 
     # cross-validation model for CR 4 & 5
     lapply(train.df$swfsc.id, function(cv.id) {
@@ -256,7 +256,7 @@ predictTestRF <- function(fit, test.df, sites, resp, age.transform){
   ) 
 }
 
-predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params, age.transform) {
+predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params, age.transform = 'none') {
   fit <- fitTrainRF(train.df, sites, resp, rf.params, age.transform)
   rbind( 
     # OOB for CR 4 & 5
@@ -311,7 +311,7 @@ predictTestENR <- function(fit, cv.df, sites, resp, age.transform){
     )
 }
 
-predictAllIDsENR <- function(train.df, model.df, sites, resp, alpha, age.transform) {
+predictAllIDsENR <- function(train.df, model.df, sites, resp, alpha, age.transform = 'none') {
   rbind( 
     # cross-validation model for CR 4 & 5
     lapply(train.df$swfsc.id, function(cv.id) {

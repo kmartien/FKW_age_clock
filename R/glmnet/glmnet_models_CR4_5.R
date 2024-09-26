@@ -1,11 +1,11 @@
+rm(list = ls())
 library(tidyverse)
-#library(mgcv)
 library(glmnet)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 
 minCR <- 4
-sites.2.use <- 'RFsites' #'Allsites' or 'RFsites'
+sites.2.use <- 'Allsites' #'Allsites' or 'RFsites'
 age.transform <- 'ln'
 nrep <- 1000
 ncores <- 10
@@ -42,32 +42,32 @@ predictAllIDsENR(train.df, model.df, sites, 'age.best', optimum.alpha$par, age.t
   saveRDS(paste0('R/glmnet/glmnet_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '.rds'))
 
 
-# Random age and best methylation estimates -------------------------------
-
-parallel::mclapply(1:nrep, function(j) {
-  # random sample of ages and methylation - only use random age
-  ran.df <- model.df |> 
-    left_join(
-      sampleAgeMeth(age.df, logit.meth.normal.params) |> 
-        select(swfsc.id, age.ran),
-      by = 'swfsc.id'
-    )
-  
-  train.df <- filter(ran.df, age.confidence >= minCR)
-  predictAllIDsENR(train.df, ran.df, sites, 'age.ran', optimum.alpha$par)
-}, mc.cores = ncores) |> 
-  bind_rows() |> 
-  saveRDS(paste0('R/glmnet/glmnet_ran_age_minCR', minCR, '_', sites.2.use, '.rds'))
-
-
-# Random age and random methylation estimates -----------------------------
-
-parallel::mclapply(1:nrep, function(j) {
-  # random sample of ages and methylation
-  ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params) 
-  
-  train.df <- filter(ran.df, age.confidence >= minCR)
-  predictAllIDsENR(train.df, ran.df, sites, 'age.ran', optimum.alpha$par)
-}, mc.cores = ncores) |> 
-  bind_rows() |> 
-  saveRDS(paste0('R/glmnet/glmnet_ran_age_meth_minCR', minCR, '_', sites.2.use, '.rds'))
+# # Random age and best methylation estimates -------------------------------
+# 
+# parallel::mclapply(1:nrep, function(j) {
+#   # random sample of ages and methylation - only use random age
+#   ran.df <- model.df |> 
+#     left_join(
+#       sampleAgeMeth(age.df, logit.meth.normal.params) |> 
+#         select(swfsc.id, age.ran),
+#       by = 'swfsc.id'
+#     )
+#   
+#   train.df <- filter(ran.df, age.confidence >= minCR)
+#   predictAllIDsENR(train.df, ran.df, sites, 'age.ran', optimum.alpha$par)
+# }, mc.cores = ncores) |> 
+#   bind_rows() |> 
+#   saveRDS(paste0('R/glmnet/glmnet_ran_age_minCR', minCR, '_', sites.2.use, '.rds'))
+# 
+# 
+# # Random age and random methylation estimates -----------------------------
+# 
+# parallel::mclapply(1:nrep, function(j) {
+#   # random sample of ages and methylation
+#   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params) 
+#   
+#   train.df <- filter(ran.df, age.confidence >= minCR)
+#   predictAllIDsENR(train.df, ran.df, sites, 'age.ran', optimum.alpha$par)
+# }, mc.cores = ncores) |> 
+#   bind_rows() |> 
+#   saveRDS(paste0('R/glmnet/glmnet_ran_age_meth_minCR', minCR, '_', sites.2.use, '.rds'))
