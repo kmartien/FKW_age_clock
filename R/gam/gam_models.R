@@ -4,8 +4,10 @@ library(mgcv)
 source('R/misc_funcs.R')
 load("data/age_and_methylation_data.rdata")
 
-sites.2.use <- 'Allsites' # 'Allsites' or 'RFsites'
+sites.2.use <- 'glmnet.5' #'Allsites', 'RFsites', 'glmnet.5'
+minCR <- 4
 age.transform <- 'ln'
+weight <- 'sn.wt' # 'CR', 'inv.var', 'sn.wt', 'none'
 nrep <- 1000
 ncores <- 10
 
@@ -15,32 +17,45 @@ age.df <- age.df |>
 
 # form model data with mean logit(Pr(methylation))
 model.df <- age.df |> 
+  mutate(
+    wt = if(weight == 'inv.var') 1/age.var else {
+      if (weight == 'CR') age.confidence else {
+        if (weight == 'sn.wt') confidence.wt else 1
+      }
+    }) |> 
   left_join(
     logit.meth.normal.params |> 
       select(swfsc.id, loc.site, mean.logit) |>
       pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
     by = 'swfsc.id'
-  ) 
+  )
 
-# filter for CR 4 & 5 samples for training model data
 train.df <- filter(model.df, age.confidence %in% 4:5)
-
-
 
 # Using sites from RF trained on all samples ------------------------------
 
-sites_Allsamps <- sites.to.keep
+sites <- sites.to.keep
 if(sites.2.use == 'RFsites'){
-# select important sites from Random Forest trained on all samples
-sites_Allsamps <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
-  filter(pval <= 0.05) |>
-  pull('loc.site')
+  # select important sites from Random Forest tuned with all samples
+  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
+    filter(pval <= 0.05) |>
+    pull('loc.site')
+}
+if(sites.2.use == 'glmnet.5'){
+  # select chosen sites from glmnet tuned with all samples, alpha = 0.5
+  sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$alpha.5$minCR2
+}
+if(sites.2.use == 'gamsites'){
+  # select chosen sites from gam.by.site
+  sites <- readRDS('R/gam/gam_significant_sites.rds') |>
+    filter(r.sq >= 0.35) |>
+    pull('loc.site')
 }
 
 # best age and methylation
 message(format(Sys.time()), ' : Best - All')
-predictAllIDsGAM(train.df, model.df, sites_Allsamps, 'age.best', age.transform) |>
-  saveRDS(paste0('R/gam/gam_best_minCR4_', sites.2.use, '_', age.transform, '.rds'))
+predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform) |>
+  saveRDS(paste0('R/gam/gam_best_minCR4_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
 # # random age and best methylation
 # message(format(Sys.time()), ' : RanAge - All')

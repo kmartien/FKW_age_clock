@@ -1,20 +1,18 @@
+rm(list=ls())
 library(tidyverse)
 library(randomForest)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 
 minCR <- 2
-
-sites.2.use <- "RFsites" #"Allsites" or "RFsites"
+sites.2.use <- 'glmnet.5' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
 age.transform <- 'ln'
+weight <- 'none' # 'CR', 'inv.var', 'sn.wt', 'none'
+nrep <- 1000
+ncores <- 10
 
 sites <- sites.to.keep
-if(sites.2.use == "RFsites"){
-  # select important sites from Random Forest trained with all samples
-  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |> 
-    filter(pval <= 0.05) |> 
-    pull('loc.site')
-}
+if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 #load(paste0('R/random forest/rf_optim_params_CR4&5_', sites.2.use, '.rda'))
 rf.params <- tibble(mtry = floor(length(sites)/3), sampsize = floor(50 * 0.632)) 
@@ -23,21 +21,25 @@ age.df <- age.df |>
   filter(swfsc.id %in% ids.to.keep)
 
 model.df <- age.df |> 
+  mutate(
+    wt = if(weight == 'inv.var') 1/age.var else {
+      if (weight == 'CR') age.confidence else {
+        if (weight == 'sn.wt') confidence.wt else 1
+      }
+    }) |> 
   left_join(
     logit.meth.normal.params |> 
       select(swfsc.id, loc.site, mean.logit) |>
       pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
     by = 'swfsc.id'
-  ) 
+  )
 
-nrep <- 1000
-ncores <- 10
 
 # Best age and methylation estimates --------------------------------------
 
 train.df <- filter(model.df, age.confidence >= minCR)
 predictAllIDsRF(train.df, model.df, sites, 'age.best', rf.params, age.transform) |> 
-  saveRDS(paste0('R/rf/rf_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '.rds'))
+  saveRDS(paste0('R/rf/rf_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
 # 
 # # Random age and best methylation estimates -------------------------------

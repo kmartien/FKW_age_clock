@@ -5,8 +5,7 @@ library(rfPermute)
 
 load("data/age_and_methylation_data.rdata")
 
-#' run randomForest over sampsize and mtry grid 
-#' and report deviance stats
+#' run randomForest over sampsize and mtry grid and report deviance stats
 rf.param.grid.search <- function(model.df, sites){
   # grid of sampsize and mtry to optimize MSE over
   params <- expand.grid(
@@ -48,6 +47,7 @@ model.df <- age.df |>
   column_to_rownames('swfsc.id') |> 
   mutate(inv.var = 1 / age.var)
 
+# All sites -----------------------------------------------------------------
 param.df  <- rf.param.grid.search(model.df, sites.to.keep)
 save(param.df, file = "R/random forest/RF.CR4&5.Allsites.grid.search.rda")
 
@@ -62,38 +62,11 @@ rf.params$Allsites <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
 #rf.params$Allsites$mtry <- 75
 #rf.params$Allsites$sampsize <- 35
-save(rf.params, file = 'R/random forest/rf_optim_params_CR4&5.rda')
+save(rf.params, file = 'R/rf_tuning/rf_optim_params_CR4&5.rda')
 
-# run rfPermute at sampsize and mtry with minimum MSE
-rp <- rfPermute(
-  y = model.df$age.best,
-  x = model.df[, sites.to.keep],
-  mtry = rf.params$Allsites$mtry,
-  ntree = 20000,
-  sampsize = rf.params$Allsites$sampsize,
-  importance = TRUE,
-  replace = FALSE,
-  num.rep = 1000,
-  num.cores = 10
-)
-
-save.image('R/random forest/rf_model_CR4&5.rdata')
-
-# save site importance scores and p-values
-rp |> 
-  importance() |> 
-  as.data.frame() |> 
-  rownames_to_column('loc.site') |> 
-  rename(
-    incMSE = '%IncMSE',
-    pval = '%IncMSE.pval'
-  ) |> 
-  select(loc.site, incMSE, pval) |> 
-  saveRDS('R/random forest/rf_site_importance_CR4&5.rds')
-
-# select important sites from Random Forest
-sites <- readRDS('R/random forest/rf_site_importance_CR4&5.rds') |> 
-  filter(pval <= 0.1) |> 
+# RFsites ------------------------------------------------------------------
+sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
+  filter(pval <= 0.05) |>
   pull('loc.site')
 
 param.df  <- rf.param.grid.search(model.df, sites)
@@ -107,37 +80,44 @@ param.df |>
 
 rf.params$RFsites <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
-#rf.params$RFsites$mtry <- 24
+#rf.params$RFsites$mtry <- 12
 #rf.params$RFsites$sampsize <- 34
+save(rf.params, file = 'R/rf_tuning/rf_optim_params_CR4&5.rda')
+
+# glmnet.5 sites ------------------------------------------------------------------
+sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$alpha.5$minCR2
+
+param.df  <- rf.param.grid.search(model.df, sites)
+save(param.df, file = "R/random forest/RF.CR4&5.glmnet.5.grid.search.rda")
+
+# plot heatmap of MSE across grid
+param.df |> 
+  ggplot() +
+  geom_tile(aes(sampsize, mtry, fill = mse)) +
+  scale_fill_distiller(palette = 'RdYlBu', direction = 1)
+
+rf.params$glmnet.5 <- filter(param.df, mse == min(param.df$mse)) |>
+  select(c(mtry, sampsize))
+#rf.params$RFsites$mtry <- 6
+#rf.params$RFsites$sampsize <- 35
 save(rf.params, file = 'R/random forest/rf_optim_params_CR4&5.rda')
 
-# model diagnostics
-print(rp)
-plotTrace(rp)
-plotImportance(rp, imp = '%IncMSE', alpha = 0.2)
-plotImportance(rp, sig = TRUE)
+# gamsites ------------------------------------------------------------------
+sites <- readRDS('R/gam/gam_significant_sites.rds') |>
+  filter(r.sq >= 0.35) |>
+  pull('loc.site')
 
-model.df |> 
-  mutate(
-    age.est = rp$rf$predicted,
-    age.confidence = factor(age.confidence)
-  ) |> 
+param.df  <- rf.param.grid.search(model.df, sites)
+save(param.df, file = "R/random forest/RF.CR4&5.gamsites.grid.search.rda")
+
+# plot heatmap of MSE across grid
+param.df |> 
   ggplot() +
-  geom_abline(intercept = 0, slope = 1) +
-  geom_point(aes(age.best, age.est, color = age.confidence), size = 3) +
-  geom_segment(aes(x = age.min, xend = age.max, y = age.est, yend = age.est, color = age.confidence), alpha = 0.5) +
-  scale_color_manual(values = conf.colors) +
-  theme(legend.position = 'top')
+  geom_tile(aes(sampsize, mtry, fill = mse)) +
+  scale_fill_distiller(palette = 'RdYlBu', direction = 1)
 
-age.pred <- rp$rf$predicted |> 
-  enframe(name = 'swfsc.id', value = 'age.pred') |> 
-  left_join(age.df, by = 'swfsc.id') |> 
-  mutate(mse = (age.best - age.pred) ^ 2)
-
-age.pred |> 
-  mutate(age.confidence = as.character(age.confidence)) |> 
-  group_by(age.confidence) |> 
-  summarize(mean.mse = mean(mse), .groups = 'drop') |> 
-  bind_rows(
-    data.frame(age.confidence = 'All', mean.mse = mean(age.pred$mse))
-  )
+rf.params$gamsites <- filter(param.df, mse == min(param.df$mse)) |>
+  select(c(mtry, sampsize))
+#rf.params$RFsites$mtry <- 4
+#rf.params$RFsites$sampsize <- 35
+save(rf.params, file = 'R/rf_tuning/rf_optim_params_CR4&5.rda')

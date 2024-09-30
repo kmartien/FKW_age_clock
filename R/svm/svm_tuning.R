@@ -17,7 +17,7 @@ model.df <- age.df |>
     by = 'swfsc.id'
   ) 
 
-sites.2.use <- list("Allsites", "RFsites")
+sites.2.use <- list("Allsites", "RFsites", 'glmnet.5', 'gamsites')
 
 svm.tuning <- lapply(c(2, 4), function(cr){
   print(paste0('minCR', cr))
@@ -28,12 +28,8 @@ svm.tuning <- lapply(c(2, 4), function(cr){
   
   t <- lapply(sites.2.use, function(s){
     print(s)
-    if(s == "RFsites"){
-      # select important sites from Random Forest
-      sites <- readRDS(paste0('R/random forest/rf_site_importance_', samps, '.rds')) |> 
-        filter(pval <= 0.1) |> 
-        pull('loc.site')
-    }
+    sites <- sites.to.keep
+    if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
     tune.obj <- tune(svm,
          age.best ~ .,
          data = select(train.df, c(age.best, all_of(sites))),

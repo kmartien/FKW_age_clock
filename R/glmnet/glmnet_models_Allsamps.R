@@ -1,42 +1,45 @@
 rm(list=ls())
 library(tidyverse)
-library(mgcv)
 library(glmnet)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 
 minCR <- 2
-sites.2.use <- 'RFsites' #'Allsites' or 'RFsites'
+sites.2.use <- 'gamsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites
 age.transform <- 'ln'
+weight <- 'CR' # 'CR', 'inv.var', 'sn.wt', 'none'
 nrep <- 1000
 ncores <- 10
 
-optimum.alpha <- readRDS('R/glmnet/optimum.alpha.rds')$minCR2
+optimum.alpha <- readRDS('R/glmnet/optim.alpha.rds')$minCR2[[sites.2.use]]
 sites <- sites.to.keep
-if(sites.2.use == 'RFsites'){
-  # select important sites from Random Forest
-  sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$minCR2
-}
+if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)
 
 model.df <- age.df |> 
+  mutate(
+    wt = if(weight == 'inv.var') 1/age.var else {
+      if (weight == 'CR') age.confidence else {
+        if (weight == 'sn.wt') confidence.wt else 1
+      }
+    }) |> 
   left_join(
     logit.meth.normal.params |> 
       select(swfsc.id, loc.site, mean.logit) |>
       pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
     by = 'swfsc.id'
-  ) 
+  )
 
 # Best age and methylation estimates --------------------------------------
 
 lapply(model.df$swfsc.id, function(cv.id) {
-  fitTrainENR(filter(model.df, swfsc.id != cv.id), sites, 'age.best', optimum.alpha$par, age.transform) |> 
+  fitTrainENR(filter(model.df, swfsc.id != cv.id), sites, 'age.best', optimum.alpha, age.transform) |> 
     predictTestENR(filter(model.df, swfsc.id == cv.id), sites, 'age.best', age.transform)
 }) |> 
   bind_rows() |>
-  saveRDS(paste0('R/glmnet/glmnet_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '.rds'))
+  saveRDS(paste0('R/glmnet/glmnet_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '_', weight, '.rds'))
 
 
 # # Random age and best methylation estimates -------------------------------

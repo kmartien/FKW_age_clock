@@ -7,18 +7,14 @@ load('R/svm/svm.tuning.rda')
 
 sites.2.use <- 'Allsites' #'Allsites' or 'RFsites'
 age.transform <- 'ln'
+weight <- 'none'
 nrep <- 1000
 ncores <- 10
 
 svm.params <- svm.tuning$Allsamps[[sites.2.use]]$best.parameters
 
 sites <- sites.to.keep
-if(sites.2.use == 'RFsites'){
-  # select important sites from Random Forest
-  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |> 
-    filter(pval <= 0.05) |> 
-    pull('loc.site')
-}
+if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)

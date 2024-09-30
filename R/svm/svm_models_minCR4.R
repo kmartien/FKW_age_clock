@@ -5,31 +5,33 @@ source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 load('R/svm/svm.tuning.rda')
 
-sites.2.use <- 'Allsites' #'All' or 'RFsites'
+sites.2.use <- 'glmnet.5' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
 age.transform <- 'ln'
+weight <- 'none'
 nrep <- 1000
 ncores <- 10
 
-svm.params <- svm.tuning$CR4_5[[sites.2.use]]$best.parameters
+# NEED TO FIX THE NEXT TO LINE FOR SVM TUNING
+svm.params <- svm.tuning$CR4_5$RFsites$best.parameters
 
 sites <- sites.to.keep
-if(sites.2.use == 'RFsites'){
-  # select important sites from Random Forest tuned with all samples
-  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |> 
-    filter(pval <= 0.05) |> 
-    pull('loc.site')
-}
+if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)
 
 model.df <- age.df |> 
+  mutate(
+    wt = if(weight == 'inv.var') 1/age.var else {
+      if (weight == 'CR') age.confidence else 1
+  }) |> 
   left_join(
     logit.meth.normal.params |> 
       select(swfsc.id, loc.site, mean.logit) |>
       pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
     by = 'swfsc.id'
-  ) 
+  )
+
 
 train.df <- filter(model.df, age.confidence %in% 4:5)
 

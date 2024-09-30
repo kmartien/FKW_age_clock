@@ -115,6 +115,26 @@ sampleAgeMeth <- function(ages, meth, ran.age = FALSE, ran.meth = FALSE) {
     ) 
 }
 
+selectCpGsites <- function(sites.2.use){
+  if(sites.2.use == 'RFsites'){
+    # select important sites from Random Forest tuned with all samples
+    sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
+      filter(pval <= 0.05) |>
+      pull('loc.site')
+  }
+  if(sites.2.use == 'glmnet.5'){
+    # select chosen sites from glmnet tuned with all samples, alpha = 0.5
+    sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$minCR2$alpha.5
+  }
+  if(sites.2.use == 'gamsites'){
+    # select chosen sites from gam.by.site
+    sites <- readRDS('R/gam/gam_significant_sites.rds') |>
+      filter(r.sq >= 0.35) |>
+      pull('loc.site')
+  }
+  return(sites)
+}
+
 # fit GAM model to training data
 fitTrainGAM <- function(train.df, sites, resp, age.transform) {
   if (age.transform == 'ln') train.df[[resp]] <- log(train.df[[resp]])
@@ -128,6 +148,7 @@ fitTrainGAM <- function(train.df, sites, resp, age.transform) {
           paste0('te(', sites, ', k = ', k, ', bs = "ts")', collapse = ' + ')
         )),
         data = train.df,
+        weights = train.df$wt,
         select = TRUE
       ),
       error = function(e) NULL
@@ -238,6 +259,7 @@ fitTrainRF <- function(df, sites, resp, rf.params, age.transform) {
   fit <- randomForest(
     formula = as.formula(paste0(resp, ' ~ .')), 
     data = select(df, c(resp, all_of(sites))),
+    weights = df$wt,
     mtry = rf.params$mtry,
     ntree = 10000,
     sampsize = rf.params$sampsize,
@@ -287,6 +309,7 @@ fitTrainENR <- function(df, sites, resp, alpha, age.transform) {
   fit <- cv.glmnet(
     x = as.matrix(df[, sites]),
     y = df[,resp],
+    weights = df$wt,
     alpha = alpha
   ) 
 }

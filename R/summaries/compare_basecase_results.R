@@ -2,23 +2,73 @@ library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 source("R/plotting.funcs.R")
-#load("data/model.params.rda")
 load("data/color.palettes.rda")
 load('data/age_and_methylation_data.rdata')
 
-#age.transform <- "ln"
-minCR <- 4
-sites.2.use <- 'RFsites'
+minCRs <- c(2, 4)
+sites.2.use <- c('RFsites', 'gamsites', 'glmnet.5')
+weight <- c('CR', 'inv.var', 'sn.wt', 'none')
 
-dat <- lapply(c('svm', 'rf', 'glmnet'), function(method){
-  readRDS(paste0('R/', method, '/', method, '_best_minCR', minCR, '_', sites.2.use, '.rds')) |>
-    rename(age.best = age.resp) |>
-    left_join(select(age.df, c(swfsc.id, age.confidence, sex)))
-})
-names(dat) <- c('svm', 'rf', 'glmnet')
-dat$gam <- readRDS('R/gam/gam_best_CR4and5.rds') |>
-  rename(age.best = age.resp) |>
-  left_join(select(age.df, c(swfsc.id, age.confidence, sex)))
+pred <-
+  do.call(rbind, lapply(c('glmnet', 'rf', 'svm'), function(m){
+    do.call(rbind, lapply(minCRs, function(cr){
+      do.call(rbind, lapply(sites.2.use, function(s){
+        if (m == 'svm'){
+          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln.rds')) |> 
+            mutate(weight = 'none')|> 
+            mutate(sites = s)
+        } else do.call(rbind, lapply(weight, function(wt){
+          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln_', wt, '.rds')) |> 
+            mutate(weight = wt)|> 
+            mutate(sites = s)
+        })) 
+      }))|> 
+        select(c('swfsc.id', 'age.resp', 'age.pred', 'resid', 'dev', 'sq.err','weight', 'sites')) |> 
+        rename(age.best = age.resp) |>
+        mutate(method = m) |> 
+        mutate(minCR = cr) 
+    }))
+  }))
+
+
+
+# pred <- do.call(rbind, lapply(c('svm', 'rf', 'glmnet', 'gam'), function(m){
+#   do.call(rbind, lapply(minCRs, function(cr){
+#     readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', sites.2.use, '_ln.rds')) |>
+#       select(c('swfsc.id', 'age.resp', 'age.pred', 'resid', 'dev', 'sq.err')) |> 
+#       rename(age.best = age.resp) |>
+#       mutate(method = m) |> 
+#       mutate(minCR = cr)
+#   }))
+# }))
+
+MAE <- 
+  pred |> 
+  left_join(age.df) |> 
+  filter(age.confidence %in% c(4,5)) |> 
+  group_by(method, minCR, sites, weight) |> 
+  summarise(MAE = median(dev))
+
+box.plot <- 
+  pred |> 
+  left_join(age.df) |> 
+  filter(age.confidence %in% c(4,5)) |> 
+  mutate(age.conficence = as.factor(age.confidence)) |> 
+  mutate(minCR = as.factor(minCR)) |> 
+#  filter(method == 'svm') |> 
+  ggplot() +
+  geom_boxplot(aes(x = sites, y = dev)) +
+  labs(x = "CpG site selection",
+       y = "Absolute age error (yrs)") +  
+  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 30, hjust=1)) +
+  facet_wrap(~method, nrow = 1,labeller = labeller(method = c(
+    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+  )))
+jpeg(file = 'R/summaries/site.selection.comparisons.jpg', width = 900, height = 900)
+box.plot
+dev.off()
+
+-----------------------------------------------------------------------------
 
 plots <- lapply(1:length(dat), function(i){
   p <- plot.loov.res(dat[[i]], min.CR = 4)
