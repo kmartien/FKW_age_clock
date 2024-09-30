@@ -1,3 +1,4 @@
+rm(list=ls())
 library(tidyverse)
 library(mgcv)
 library(e1071)
@@ -5,7 +6,9 @@ source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 load('R/svm/svm.tuning.rda')
 
-sites.2.use <- 'Allsites' #'Allsites' or 'RFsites'
+minCR <- 2
+
+sites.2.use <- 'glmnet.5' #'Allsites' or 'RFsites', 'glmnet.5', 'gamsites'
 age.transform <- 'ln'
 weight <- 'none'
 nrep <- 1000
@@ -18,7 +21,9 @@ if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)
+
 model.df <- age.df |> 
+  mutate(wt = 1) |> 
   left_join(
     logit.meth.normal.params |> 
       select(swfsc.id, loc.site, mean.logit) |>

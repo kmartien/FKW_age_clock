@@ -17,7 +17,7 @@ model.df <- age.df |>
     by = 'swfsc.id'
   ) 
 
-sites.2.use <- list("Allsites", "RFsites", 'glmnet.5', 'gamsites')
+sites.2.use <- c('Allsites', 'RFsites', 'glmnet.5', 'gamsites')
 
 svm.tuning <- lapply(c(2, 4), function(cr){
   print(paste0('minCR', cr))
@@ -29,7 +29,7 @@ svm.tuning <- lapply(c(2, 4), function(cr){
   t <- lapply(sites.2.use, function(s){
     print(s)
     sites <- sites.to.keep
-    if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
+    if(s != 'Allsites') sites <- selectCpGsites(s)
     tune.obj <- tune(svm,
          age.best ~ .,
          data = select(train.df, c(age.best, all_of(sites))),

@@ -1,3 +1,4 @@
+rm(list=ls())
 library(tidyverse)
 library(mgcv)
 library(e1071)
@@ -5,14 +6,13 @@ source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 load('R/svm/svm.tuning.rda')
 
-sites.2.use <- 'glmnet.5' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
+sites.2.use <- 'Allsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
 age.transform <- 'ln'
 weight <- 'none'
 nrep <- 1000
 ncores <- 10
 
-# NEED TO FIX THE NEXT TO LINE FOR SVM TUNING
-svm.params <- svm.tuning$CR4_5$RFsites$best.parameters
+svm.params <- svm.tuning$CR4_5[[sites.2.use]]$best.parameters
 
 sites <- sites.to.keep
 if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
