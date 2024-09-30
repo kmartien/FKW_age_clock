@@ -4,10 +4,10 @@ library(mgcv)
 source('R/misc_funcs.R')
 load("data/age_and_methylation_data.rdata")
 
-sites.2.use <- 'glmnet.5' #'Allsites', 'RFsites', 'glmnet.5'
+sites.2.use <- 'glmnet.5' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
 minCR <- 4
 age.transform <- 'ln'
-weight <- 'sn.wt' # 'CR', 'inv.var', 'sn.wt', 'none'
+weight <- 'none' # 'CR', 'inv.var', 'sn.wt', 'none'
 nrep <- 1000
 ncores <- 10
 
@@ -30,32 +30,21 @@ model.df <- age.df |>
     by = 'swfsc.id'
   )
 
-train.df <- filter(model.df, age.confidence %in% 4:5)
-
-# Using sites from RF trained on all samples ------------------------------
+train.df <- filter(model.df, age.confidence >= minCR)
 
 sites <- sites.to.keep
-if(sites.2.use == 'RFsites'){
-  # select important sites from Random Forest tuned with all samples
-  sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
-    filter(pval <= 0.05) |>
-    pull('loc.site')
-}
-if(sites.2.use == 'glmnet.5'){
-  # select chosen sites from glmnet tuned with all samples, alpha = 0.5
-  sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$alpha.5$minCR2
-}
-if(sites.2.use == 'gamsites'){
-  # select chosen sites from gam.by.site
-  sites <- readRDS('R/gam/gam_significant_sites.rds') |>
-    filter(r.sq >= 0.35) |>
-    pull('loc.site')
-}
+if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 # best age and methylation
 message(format(Sys.time()), ' : Best - All')
-predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform) |>
-  saveRDS(paste0('R/gam/gam_best_minCR4_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+pred <- if (minCR == 2){
+  # LOO cross validation for all samples
+  lapply(model.df$swfsc.id, function(cv.id) {
+    fitTrainGAM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', age.transform) |> 
+      predictTestGAM(filter(model.df, swfsc.id == cv.id), 'age.best', age.transform)
+  })|> bind_rows() 
+} else {predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform)}
+saveRDS(pred, paste0('R/gam/gam_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
 # # random age and best methylation
 # message(format(Sys.time()), ' : RanAge - All')
