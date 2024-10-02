@@ -14,8 +14,10 @@ ncores <- 10
 sites <- sites.to.keep
 if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
+########## WTF!!!!!!!!!!!!!!!!!!!!!!!!  ########################
 #load(paste0('R/random forest/rf_optim_params_CR4&5_', sites.2.use, '.rda'))
 rf.params <- tibble(mtry = floor(length(sites)/3), sampsize = floor(50 * 0.632)) 
+################################################################
 
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)

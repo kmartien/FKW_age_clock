@@ -2,8 +2,9 @@ rm(list = ls())
 library(tidyverse)
 library(randomForest)
 library(rfPermute)
-
 load("data/age_and_methylation_data.rdata")
+
+minCR <- 4
 
 #' run randomForest over sampsize and mtry grid and report deviance stats
 rf.param.grid.search <- function(model.df, sites){
@@ -36,7 +37,7 @@ rf.param.grid.search <- function(model.df, sites){
 }
 
 model.df <- age.df |>
-  filter(swfsc.id %in% ids.to.keep & age.confidence >=4) |>
+  filter(swfsc.id %in% ids.to.keep & age.confidence >= minCR) |>
   left_join(
     logit.meth.normal.params |>
       filter(loc.site %in% sites.to.keep) |>
@@ -49,7 +50,7 @@ model.df <- age.df |>
 
 # All sites -----------------------------------------------------------------
 param.df  <- rf.param.grid.search(model.df, sites.to.keep)
-save(param.df, file = "R/random forest/RF.CR4&5.Allsites.grid.search.rda")
+save(param.df, file = paste0('R/rf_tuning/rf_minCR', minCR, '_Allsites.grid.search.rda'))
 
 # plot heatmap of MSE across grid
 param.df |> 
@@ -60,9 +61,9 @@ param.df |>
 rf.params <- list()
 rf.params$Allsites <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
-#rf.params$Allsites$mtry <- 75
-#rf.params$Allsites$sampsize <- 35
-save(rf.params, file = 'R/rf_tuning/rf_optim_params_CR4&5.rda')
+rf.params$Allsites$mtry <- 63
+rf.params$Allsites$sampsize <- 35
+save(rf.params, file = paste0('R/rf_tuning/rf_optim_params_minCR', minCR, '.rda'))
 
 # RFsites ------------------------------------------------------------------
 sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
@@ -70,7 +71,7 @@ sites <- readRDS('R/rf_tuning/rf_site_importance_Allsamps.rds') |>
   pull('loc.site')
 
 param.df  <- rf.param.grid.search(model.df, sites)
-save(param.df, file = "R/random forest/RF.CR4&5.RFsites.grid.search.rda")
+save(param.df, file = paste0('R/rf_tuning/rf_minCR', minCR, '_RFsites.grid.search.rda'))
 
 # plot heatmap of MSE across grid
 param.df |> 
@@ -82,13 +83,13 @@ rf.params$RFsites <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
 #rf.params$RFsites$mtry <- 12
 #rf.params$RFsites$sampsize <- 34
-save(rf.params, file = 'R/rf_tuning/rf_optim_params_CR4&5.rda')
+save(rf.params, file = paste0('R/rf_tuning/rf_optim_params_minCR', minCR, '.rda'))
 
 # glmnet.5 sites ------------------------------------------------------------------
-sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$alpha.5$minCR2
+sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$minCR2$alpha.5
 
 param.df  <- rf.param.grid.search(model.df, sites)
-save(param.df, file = "R/random forest/RF.CR4&5.glmnet.5.grid.search.rda")
+save(param.df, file = paste0('R/rf_tuning/rf_minCR', minCR, '_glmnnet.5.grid.search.rda'))
 
 # plot heatmap of MSE across grid
 param.df |> 
@@ -100,7 +101,7 @@ rf.params$glmnet.5 <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
 #rf.params$RFsites$mtry <- 6
 #rf.params$RFsites$sampsize <- 35
-save(rf.params, file = 'R/random forest/rf_optim_params_CR4&5.rda')
+save(rf.params, file = paste0('R/rf_tuning/rf_optim_params_minCR', minCR, '.rda'))
 
 # gamsites ------------------------------------------------------------------
 sites <- readRDS('R/gam/gam_significant_sites.rds') |>
@@ -108,7 +109,7 @@ sites <- readRDS('R/gam/gam_significant_sites.rds') |>
   pull('loc.site')
 
 param.df  <- rf.param.grid.search(model.df, sites)
-save(param.df, file = "R/random forest/RF.CR4&5.gamsites.grid.search.rda")
+save(param.df, file = paste0('R/rf_tuning/rf_minCR', minCR, '_gamsites.grid.search.rda'))
 
 # plot heatmap of MSE across grid
 param.df |> 
@@ -120,4 +121,4 @@ rf.params$gamsites <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
 #rf.params$RFsites$mtry <- 4
 #rf.params$RFsites$sampsize <- 35
-save(rf.params, file = 'R/rf_tuning/rf_optim_params_CR4&5.rda')
+save(rf.params, file = paste0('R/rf_tuning/rf_optim_params_minCR', minCR, '.rda'))
