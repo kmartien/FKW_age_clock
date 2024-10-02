@@ -6,11 +6,11 @@ load("data/color.palettes.rda")
 load('data/age_and_methylation_data.rdata')
 
 minCRs <- c(2, 4)
-sites.2.use <- c('RFsites', 'gamsites', 'glmnet.5')
+sites.2.use <- c('RFsites', 'glmnet.5')
 weight <- c('CR', 'inv.var', 'sn.wt', 'none')
 
 pred <-
-  do.call(rbind, lapply(c('glmnet', 'rf', 'svm'), function(m){
+  do.call(rbind, lapply(c('glmnet', 'rf', 'svm', 'gam'), function(m){
     do.call(rbind, lapply(minCRs, function(cr){
       do.call(rbind, lapply(sites.2.use, function(s){
         if (m == 'svm'){
@@ -30,8 +30,96 @@ pred <-
     }))
   }))
 
+sites.2.use <- c('Allsites')
+pred <- bind_rows(pred, 
+  do.call(rbind, lapply(c('glmnet', 'rf', 'svm'), function(m){
+    do.call(rbind, lapply(minCRs, function(cr){
+      do.call(rbind, lapply(sites.2.use, function(s){
+        if (m == 'svm'){
+          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln.rds')) |> 
+            mutate(weight = 'none')|> 
+            mutate(sites = s)
+        } else do.call(rbind, lapply(weight, function(wt){
+          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln_', wt, '.rds')) |> 
+            mutate(weight = wt)|> 
+            mutate(sites = s)
+        })) 
+      }))|> 
+        select(c('swfsc.id', 'age.resp', 'age.pred', 'resid', 'dev', 'sq.err','weight', 'sites')) |> 
+        rename(age.best = age.resp) |>
+        mutate(method = m) |> 
+        mutate(minCR = cr) 
+    }))
+  }))
+) |> 
+mutate(model = paste('minCR', minCR, sites, weight, 'best', sep = '_'))
 
+MAE.all <- left_join(
+  left_join(
+    pred |> 
+      left_join(age.df) |> 
+      filter(age.confidence %in% c(4,5)) |> 
+      group_by(method, sites, weight, minCR) |> 
+      summarise(MAE = median(dev)),
+    pred |> 
+      left_join(age.df) |> 
+      filter(age.confidence %in% c(4,5)) |> 
+      group_by(method, sites, weight, minCR) |> 
+      summarise(lci = quantile(dev, probs = c(.25)))
+  ),
+  pred |> 
+    left_join(age.df) |> 
+    filter(age.confidence %in% c(4,5)) |> 
+    group_by(method, sites, weight, minCR) |> 
+    summarise(uci = quantile(dev, probs = c(.75)))
+)
+write.csv(MAE.all, file = 'R/summaries/MAE.Allsites.csv')
 
+models.2.plot <- c(
+  'minCR_4_RFsites_none_best',
+  'minCR_4_Allsites_none_best',
+  'minCR_4_glmnet.5_none_best',
+  'minCR_2_RFsites_none_best', 
+  'minCR_2_RFsites_CR_best',
+  'minCR_2_RFsites_sn.wt_best',
+  'minCR_2_RFsites_inv.var_best',
+  'minCR_4_RFsites_none_RanAge',
+  'minCR_4_RFsites_none_RanAgeMeth'
+)
+
+pred.2.plot <- filter(pred, model %in% models.2.plot) |> 
+  mutate(
+    model.name = case_when(
+      model == 'minCR_4_RFsites_none_best' ~ 'Base',
+      model == 'minCR_4_Allsites_none_best' ~ 'Allsites',
+      model == 'minCR_4_glmnet.5_none_best' ~ 'glmnetsites',
+      model == 'minCR_2_RFsites_none_best' ~ 'unweighted',
+      model == 'minCR_2_RFsites_CR_best' ~ 'CR',
+      model == 'minCR_2_RFsites_sn.wt_best' ~ 'sn.wt',
+      model == 'minCR_2_RFsites_inv.var_best' ~ 'inv.var',
+      model == 'minCR_4_RFsites_none_RanAge' ~ 'RanAge',
+      model == 'minCR_4_RFsites_none_RanAgeMeth' ~ 'RanAgeMeth',
+      .default = 'other'
+    )
+  )
+box.plot <- 
+  pred.2.plot |> 
+  left_join(age.df) |> 
+  filter(age.confidence %in% c(4,5)) |> 
+  mutate(age.conficence = as.factor(age.confidence)) |> 
+  mutate(minCR = as.factor(minCR)) |> 
+  ggplot() +
+  geom_boxplot(aes(x = model.name, y = dev)) +
+  labs(x = "Model",
+       y = "Absolute age error (yrs)") +  
+  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 30, hjust=1)) +
+  #  facet_wrap(~method, nrow = 1)
+  facet_wrap(~method, nrow = 2,labeller = labeller(method = c(
+    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+  )))
+jpeg(file = 'R/summaries/model.boxplot.jpg', width = 1200, height = 1200)
+box.plot
+dev.off()
 # pred <- do.call(rbind, lapply(c('svm', 'rf', 'glmnet', 'gam'), function(m){
 #   do.call(rbind, lapply(minCRs, function(cr){
 #     readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', sites.2.use, '_ln.rds')) |>
@@ -42,32 +130,71 @@ pred <-
 #   }))
 # }))
 
-MAE <- 
-  pred |> 
+# Base-case: minCR = 4, weight = none, compare methods and site selection
+
+base.res <-   pred |> 
   left_join(age.df) |> 
   filter(age.confidence %in% c(4,5)) |> 
-  group_by(method, minCR, sites, weight) |> 
+  filter(weight == 'none' & minCR == 4)
+  
+MAE.base <- 
+  base.res |> 
+  group_by(method, sites, weight, minCR) |> 
   summarise(MAE = median(dev))
 
 box.plot <- 
-  pred |> 
-  left_join(age.df) |> 
-  filter(age.confidence %in% c(4,5)) |> 
+  base.res |> 
   mutate(age.conficence = as.factor(age.confidence)) |> 
   mutate(minCR = as.factor(minCR)) |> 
-#  filter(method == 'svm') |> 
   ggplot() +
   geom_boxplot(aes(x = sites, y = dev)) +
   labs(x = "CpG site selection",
        y = "Absolute age error (yrs)") +  
   theme(text = element_text(size = 24), axis.text.x = element_text(angle = 30, hjust=1)) +
+#  facet_wrap(~method, nrow = 1)
   facet_wrap(~method, nrow = 1,labeller = labeller(method = c(
     'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
   )))
-jpeg(file = 'R/summaries/site.selection.comparisons.jpg', width = 900, height = 900)
+jpeg(file = 'R/summaries/site.selection.jpg', width = 900, height = 1200)
 box.plot
 dev.off()
 
+# sample selection and weighting (sites = RFsites)
+
+minCR.res <-   pred |> 
+  left_join(age.df) |> 
+  filter(age.confidence %in% c(4,5)) |> 
+  filter(sites == 'RFsites') |> 
+  filter(minCR == 2 | weight == 'none' & minCR == 4)
+
+MAE.minCR <- 
+  minCR.res |> 
+  group_by(method, sites, weight, minCR) |> 
+  summarise(MAE = median(dev))
+
+box.plot <- 
+  minCR.res |> 
+  mutate(age.conficence = as.factor(age.confidence)) |> 
+  mutate(minCR = as.factor(minCR)) |> 
+  mutate(minCR.wt = paste0('minCR', minCR, '_', weight)) |> 
+  ggplot() +
+  geom_boxplot(aes(x = minCR.wt, y = dev)) +
+  labs(x = "minCR",
+       y = "Absolute age error (yrs)") +  
+  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 30, hjust=1)) +
+#    facet_wrap(~method, nrow = 1)
+  facet_wrap(~method, nrow = 1, labeller = labeller(method = c(
+    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+  )))
+jpeg(file = 'R/summaries/minCR.jpg', width = 1800, height = 900)
+box.plot
+dev.off()
+
+# histogram of MAE by method ------------------------------------------------
+MAE.hist <- MAE.all |> 
+  ggplot() +
+  geom_histogram(aes(x = MAE, fill = method)) 
+MAE.hist
 -----------------------------------------------------------------------------
 
 plots <- lapply(1:length(dat), function(i){
