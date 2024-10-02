@@ -5,6 +5,10 @@ source("R/plotting.funcs.R")
 load("data/color.palettes.rda")
 load('data/age_and_methylation_data.rdata')
 
+# subset all data
+age.df <- age.df |>  
+  filter(swfsc.id %in% ids.to.keep)
+
 minCRs <- c(2, 4)
 sites.2.use <- c('RFsites', 'glmnet.5')
 weight <- c('CR', 'inv.var', 'sn.wt', 'none')
@@ -90,15 +94,15 @@ models.2.plot <- c(
 pred.2.plot <- filter(pred, model %in% models.2.plot) |> 
   mutate(
     model.name = case_when(
-      model == 'minCR_4_RFsites_none_best' ~ 'Base',
-      model == 'minCR_4_Allsites_none_best' ~ 'Allsites',
-      model == 'minCR_4_glmnet.5_none_best' ~ 'glmnetsites',
-      model == 'minCR_2_RFsites_none_best' ~ 'unweighted',
-      model == 'minCR_2_RFsites_CR_best' ~ 'CR',
-      model == 'minCR_2_RFsites_sn.wt_best' ~ 'sn.wt',
-      model == 'minCR_2_RFsites_inv.var_best' ~ 'inv.var',
-      model == 'minCR_4_RFsites_none_RanAge' ~ 'RanAge',
-      model == 'minCR_4_RFsites_none_RanAgeMeth' ~ 'RanAgeMeth',
+      model == 'minCR_4_RFsites_none_best' ~ '1Base',
+      model == 'minCR_4_Allsites_none_best' ~ '2Allsites',
+      model == 'minCR_4_glmnet.5_none_best' ~ '3glmnetsites',
+      model == 'minCR_2_RFsites_none_best' ~ '4unweighted',
+      model == 'minCR_2_RFsites_CR_best' ~ '5CR',
+      model == 'minCR_2_RFsites_sn.wt_best' ~ '6sn.wt',
+      model == 'minCR_2_RFsites_inv.var_best' ~ '7inv.var',
+      model == 'minCR_4_RFsites_none_RanAge' ~ '8RanAge',
+      model == 'minCR_4_RFsites_none_RanAgeMeth' ~ '9RanAgeMeth',
       .default = 'other'
     )
   )
@@ -117,9 +121,28 @@ box.plot <-
   facet_wrap(~method, nrow = 2,labeller = labeller(method = c(
     'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
   )))
-jpeg(file = 'R/summaries/model.boxplot.jpg', width = 1200, height = 1200)
+jpeg(file = 'R/summaries/model.boxplot.jpg', width = 1200, height = 2400)
 box.plot
 dev.off()
+
+
+# plot age.best vs. inv.var
+plots <-
+  lapply(c('CR', 'sn.wt', 'inv.var'), function(weight){
+    age.df |> 
+      mutate(wt = if (weight == 'CR') age.confidence else {if(weight == 'inv.var') 1/age.var else confidence.wt}) |> 
+#      mutate(age.confidence = factor(age.confidence)) |> 
+      ggplot() +
+      geom_point(aes(x = age.best, y = wt))#, colour = age.confidence)) +
+#      scale_fill_manual(values = conf.colors)
+  })
+
+
+
+
+
+# code I'm not currently using --------------------------------------------
+
 # pred <- do.call(rbind, lapply(c('svm', 'rf', 'glmnet', 'gam'), function(m){
 #   do.call(rbind, lapply(minCRs, function(cr){
 #     readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', sites.2.use, '_ln.rds')) |>
