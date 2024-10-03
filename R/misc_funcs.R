@@ -103,7 +103,7 @@ crcAgeDist <- function(
   }
 }
 
-sampleAgeMeth <- function(ages, meth, ran.age = FALSE, ran.meth = FALSE) {
+sampleAgeMeth <- function(ages, meth) {
   ages |>  
     mutate(age.ran = ranAges(ages)) |> 
     left_join(
