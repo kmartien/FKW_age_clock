@@ -268,34 +268,24 @@ fitTrainRF <- function(df, sites, resp, rf.params, age.transform) {
 }
 
 predictTestRF <- function(fit, test.df, sites, resp, age.transform){
-  if(is.null(fit)) return(NULL)
-  
-  pred <- predict(
-    fit, 
-    select(test.df, all_of(sites))
-  )
 
+  pred <- 
+    if(is.null(fit)){
+      fitTrainRF(train.df, sites, resp, rf.params, age.transform)$predicted
+    } else {
+      predict(
+        fit, 
+        select(test.df, all_of(sites))
+      )
+    }
+  if (age.transform == 'ln') pred <- exp(pred)
+      
   tibble(
     swfsc.id = test.df$swfsc.id,
     age.resp = test.df[[resp]],
     age.pred = unname(pred),
-  ) 
-}
-
-predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params, age.transform = 'none') {
-  fit <- fitTrainRF(train.df, sites, resp, rf.params, age.transform)
-  rbind( 
-    # OOB for CR 4 & 5
-    tibble(
-      swfsc.id = train.df$swfsc.id,
-      age.resp = train.df[[resp]],
-      age.pred = fit$predicted
-      ),
-    # full CR 4 & 5 model to predict CR 2 & 3
-    predictTestRF(fit, filter(model.df, age.confidence %in% 2:3), sites, resp, age.transform)
   ) |> 
     mutate(
-      age.pred = if (age.transform == 'ln') exp(age.pred) else age.pred,
       age.pred = ifelse(age.pred < 0, 0, age.pred),
       age.pred = ifelse(age.pred > 80, 80, age.pred),
       resid = age.pred - age.resp,
@@ -303,6 +293,38 @@ predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params, age.tran
       sq.err = resid ^ 2
     )
 }
+
+predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params, age.transform = 'none') {
+  rbind( 
+    # OOB predictions for training samples
+        predictTestRF(fit = NULL, train.df, sites, resp, age.transform),
+    # full model to predict test samples
+    fitTrainRF(train.df, sites, resp, rf.params, age.transform) |> 
+      predictTestSVM(filter(model.df, age.confidence %in% 2:3), sites, resp, age.transform)
+  ) 
+}
+  
+  
+#   fit <- fitTrainRF(train.df, sites, resp, rf.params, age.transform)
+#   rbind( 
+#     # OOB for CR 4 & 5
+#     tibble(
+#       swfsc.id = train.df$swfsc.id,
+#       age.resp = train.df[[resp]],
+#       age.pred = fit$predicted
+#       ),
+#     # full CR 4 & 5 model to predict CR 2 & 3
+#     predictTestRF(fit, filter(model.df, age.confidence %in% 2:3), sites, resp, age.transform)
+#   ) |> 
+#     mutate(
+#       age.pred = if (age.transform == 'ln') exp(age.pred) else age.pred,
+#       age.pred = ifelse(age.pred < 0, 0, age.pred),
+#       age.pred = ifelse(age.pred > 80, 80, age.pred),
+#       resid = age.pred - age.resp,
+#       dev = abs(resid),
+#       sq.err = resid ^ 2
+#     )
+# }
 
 fitTrainENR <- function(df, sites, resp, alpha, age.transform) {
   if (age.transform == 'ln') df[[resp]] <- log(df[[resp]])
