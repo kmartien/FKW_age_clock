@@ -10,60 +10,38 @@ age.df <- age.df |>
   filter(swfsc.id %in% ids.to.keep)
 
 minCRs <- c(2, 4)
-sites.2.use <- c('RFsites', 'glmnet.5')
-weight <- c('CR', 'inv.var', 'sn.wt', 'none')
+sites.2.use <- c('RFsites', 'glmnet.5', 'Allsites')
+wts.2.use <- c('CR', 'sn.wt', 'none')
 
-pred <-
-  do.call(rbind, lapply(c('glmnet', 'rf', 'svm', 'gam'), function(m){
-    do.call(rbind, lapply(minCRs, function(cr){
-      do.call(rbind, lapply(sites.2.use, function(s){
-        if (m == 'svm'){
-          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln.rds')) |> 
-            mutate(weight = 'none')|> 
-            mutate(sites = s)
-        } else do.call(rbind, lapply(weight, function(wt){
-          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln_', wt, '.rds')) |> 
-            mutate(weight = wt)|> 
-            mutate(sites = s)
-        })) 
-      }))|> 
-        select(c('swfsc.id', 'age.resp', 'age.pred', 'resid', 'dev', 'sq.err','weight', 'sites')) |> 
-        rename(age.best = age.resp) |>
-        mutate(method = m) |> 
-        mutate(minCR = cr) 
-    }))
-  }))
+res.files <- bind_rows(
+  lapply(c('svm', 'gam', 'glmnet', 'rf'), function(m){
+  fnames <- list.files(paste0('R/', m), pattern = paste0(m, '_best'))
+      bind_cols(fnames, do.call(rbind, strsplit(fnames, split = '_')))
+}) |> bind_rows(),
+lapply(c('svm', 'gam', 'glmnet', 'rf'), function(m){
+  fnames <- list.files(paste0('R/', m), pattern = paste0(m, '_ranAge'))
+  bind_cols(fnames, do.call(rbind, strsplit(fnames, split = '_')))
+}) |> bind_rows()
+)
+names(res.files) <- c('fname', 'method', 'resample', 'minCR', 'sites', 'age.transform', 'weight')
+res.files$weight <- substr(res.files$weight, 1, nchar(res.files$weight) - 4)
 
-sites.2.use <- c('Allsites')
-pred <- bind_rows(pred, 
-  do.call(rbind, lapply(c('glmnet', 'rf', 'svm'), function(m){
-    do.call(rbind, lapply(minCRs, function(cr){
-      do.call(rbind, lapply(sites.2.use, function(s){
-        if (m == 'svm'){
-          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln.rds')) |> 
-            mutate(weight = 'none')|> 
-            mutate(sites = s)
-        } else do.call(rbind, lapply(weight, function(wt){
-          readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', s, '_ln_', wt, '.rds')) |> 
-            mutate(weight = wt)|> 
-            mutate(sites = s)
-        })) 
-      }))|> 
-        select(c('swfsc.id', 'age.resp', 'age.pred', 'resid', 'dev', 'sq.err','weight', 'sites')) |> 
-        rename(age.best = age.resp) |>
-        mutate(method = m) |> 
-        mutate(minCR = cr) 
-    }))
-  }))
-) |> 
-mutate(model = paste('minCR', minCR, sites, weight, 'best', sep = '_'))
+pred <- left_join(
+  res.files,
+  lapply(1:nrow(res.files), function(f){
+    data.frame(fname = res.files$fname[f], readRDS(paste0('R/', res.files$method[f], '/', res.files$fname[f])))
+  }) |> bind_rows(),
+  by = 'fname'
+) |> select(-c(lci, uci, k)) |> 
+  filter(weight %in% wts.2.use, sites %in% sites.2.use) |> 
+  mutate(model = paste(resample, minCR, sites, age.transform, weight, sep = '_'))
 
 MAE.all <- left_join(
   left_join(
     pred |> 
       left_join(age.df) |> 
       filter(age.confidence %in% c(4,5)) |> 
-      group_by(method, sites, weight, minCR) |> 
+      group_by(method, sites, weight, minCR, resample) |> 
       summarise(MAE = median(dev)),
     pred |> 
       left_join(age.df) |> 
@@ -77,18 +55,18 @@ MAE.all <- left_join(
     group_by(method, sites, weight, minCR) |> 
     summarise(uci = quantile(dev, probs = c(.75)))
 )
-write.csv(MAE.all, file = 'R/summaries/MAE.Allsites.csv')
+write.csv(MAE.all, file = 'R/summaries/MAE.all.csv')
 
 models.2.plot <- c(
-  'minCR_4_RFsites_none_best',
-  'minCR_4_Allsites_none_best',
-  'minCR_4_glmnet.5_none_best',
-  'minCR_2_RFsites_none_best', 
-  'minCR_2_RFsites_CR_best',
-  'minCR_2_RFsites_sn.wt_best',
-  'minCR_2_RFsites_inv.var_best',
-  'minCR_4_RFsites_none_RanAge',
-  'minCR_4_RFsites_none_RanAgeMeth'
+  'best_minCR4_RFsites_ln_none',
+  'best_minCR4_Allsites_ln_none',
+  'best_minCR4_glmnet.5_ln_none',
+  'best_minCR2_RFsites_ln_none', 
+  'best_minCR2_RFsites_ln_CR',
+  'best_minCR2_RFsites_ln_sn.wt',
+  'best_minCR2_RFsites_ln_inv.var',
+  'ranAge_minCR4_RFsites_ln_none',
+  'ranAgeMeth_minCR4_RFsites_ln_none'
 )
 
 pred.2.plot <- filter(pred, model %in% models.2.plot) |> 
@@ -113,7 +91,7 @@ box.plot <-
   mutate(age.conficence = as.factor(age.confidence)) |> 
   mutate(minCR = as.factor(minCR)) |> 
   ggplot() +
-  geom_boxplot(aes(x = model.name, y = dev)) +
+  geom_boxplot(aes(x = model, y = dev)) +
   labs(x = "Model",
        y = "Absolute age error (yrs)") +  
   theme(text = element_text(size = 24), axis.text.x = element_text(angle = 30, hjust=1)) +
