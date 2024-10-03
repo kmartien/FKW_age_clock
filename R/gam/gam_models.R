@@ -35,7 +35,8 @@ train.df <- filter(model.df, age.confidence >= minCR)
 sites <- sites.to.keep
 if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
-# best age and methylation
+# Best age and methylation estimates --------------------------------------
+
 message(format(Sys.time()), ' : Best - All')
 pred <- if (minCR == 2){
   # LOO cross validation for all samples
@@ -46,63 +47,27 @@ pred <- if (minCR == 2){
 } else {predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform)}
 saveRDS(pred, paste0('R/gam/gam_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
-# # random age and best methylation
-# message(format(Sys.time()), ' : RanAge - All')
-# parallel::mclapply(1:nrep, function(j) {
-#   ran.df <- model.df |> 
-#     left_join(
-#       sampleAgeMeth(age.df, logit.meth.normal.params) |> 
-#         select(swfsc.id, age.ran),
-#       by = 'swfsc.id'
-#     ) 
-#   predictAllIDsGAM(filter(ran.df, age.confidence %in% 4:5), ran.df, sites_Allsamps, 'age.ran')
-# }, mc.cores = ncores) |> 
-#   bind_rows() |> 
-#   saveRDS('gam_ran_age_Allsamps.rds')
-# 
-# # random age and random methylation
-# message(format(Sys.time()), ' : RanAgeMeth - All')
-# parallel::mclapply(1:nrep, function(j) {
-#   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params) 
-#   predictAllIDsGAM(filter(ran.df, age.confidence %in% 4:5), ran.df, sites_Allsamps, 'age.ran')
-# }, mc.cores = ncores) |> 
-#   bind_rows() |> 
-#   saveRDS('gam_ran_age_meth_Allsamps.rds')
-# 
-# 
-# 
-# 
-# # Using sites from RF trained on CR 4 & 5 samples -------------------------
-# 
-# # select important sites from Random Forest trained on CR 4 & 5 samples
-# sites_CR4and5 <- readRDS('../random forest/rf_site_importance_CR4&5.rds') |> 
-#   filter(pval <= 0.05) |> 
-#   pull('loc.site')
-# 
-# # best age and methylation
-# message(format(Sys.time()), ' : Best - CR4and5')
-# predictAllIDsGAM(train.df, model.df, sites_CR4and5, 'age.best') |> 
-#   saveRDS('gam_best_CR4and5.rds')
-# 
-# # random age and best methylation
-# message(format(Sys.time()), ' : RanAge - CR4and5')
-# parallel::mclapply(1:nrep, function(j) {
-#   ran.df <- model.df |> 
-#     left_join(
-#       sampleAgeMeth(age.df, logit.meth.normal.params) |> 
-#         select(swfsc.id, age.ran),
-#       by = 'swfsc.id'
-#     )
-#   predictAllIDsGAM(filter(ran.df, age.confidence %in% 4:5), ran.df, sites_CR4and5, 'age.ran')
-# }, mc.cores = ncores) |> 
-#   bind_rows() |> 
-#   saveRDS('gam_ran_age_CR4and5.rds')
-# 
-# # random age and random methylation
-# message(format(Sys.time()), ' : RanAgeMeth - CR4and5')
-# parallel::mclapply(1:nrep, function(j) {
-#   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params) 
-#   predictAllIDsGAM(filter(ran.df, age.confidence %in% 4:5), ran.df, sites_CR4and5, 'age.ran')
-# }, mc.cores = ncores) |> 
-#   bind_rows() |> 
-#   saveRDS('gam_ran_age_meth_CR4and5.rds')
+# Random age and best methylation estimates -------------------------------
+
+message(format(Sys.time()), ' : RanAge - All')
+parallel::mclapply(1:nrep, function(j) {
+  ran.df <- model.df |>
+    left_join(
+      sampleAgeMeth(age.df, logit.meth.normal.params) |>
+        select(swfsc.id, age.ran),
+      by = 'swfsc.id'
+    )
+  predictAllIDsGAM(filter(ran.df, age.confidence %in% 4:5), ran.df, sites_Allsamps, 'age.ran')
+}, mc.cores = ncores) |>
+  bind_rows() |>
+  saveRDS('gam_ran_age_Allsamps.rds')
+
+# Random age and random methylation estimates -----------------------------
+
+message(format(Sys.time()), ' : RanAgeMeth - All')
+parallel::mclapply(1:nrep, function(j) {
+  ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
+  predictAllIDsGAM(filter(ran.df, age.confidence %in% 4:5), ran.df, sites_Allsamps, 'age.ran')
+}, mc.cores = ncores) |>
+  bind_rows() |>
+  saveRDS('gam_ran_age_meth_Allsamps.rds')

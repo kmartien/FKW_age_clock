@@ -69,7 +69,7 @@ parallel::mclapply(1:nrep, function(j) {
   }
 }, mc.cores = ncores) |>
   bind_rows() |>
-  saveRDS(paste0('R/rf/rf_ran_age_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+  saveRDS(paste0('R/rf/rf_ranAge_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
 
 # Random age and random methylation estimates -----------------------------
@@ -88,4 +88,4 @@ parallel::mclapply(1:nrep, function(j) {
   }
 }, mc.cores = ncores) |>
   bind_rows() |>
-  saveRDS(paste0('R/rf/rf_ran_age_meth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+  saveRDS(paste0('R/rf/rf_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
