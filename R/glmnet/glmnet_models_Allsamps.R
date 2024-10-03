@@ -5,9 +5,9 @@ source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 
 minCR <- 2
-sites.2.use <- 'gamsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites
+sites.2.use <- 'RFsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites
 age.transform <- 'ln'
-weight <- 'CR' # 'CR', 'inv.var', 'sn.wt', 'none'
+weight <- 'none' # 'CR', 'inv.var', 'sn.wt', 'none'
 nrep <- 1000
 ncores <- 10
 
@@ -16,15 +16,15 @@ sites <- sites.to.keep
 if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 age.df <- age.df |>  
-  filter(swfsc.id %in% ids.to.keep)
-
-model.df <- age.df |> 
+  filter(swfsc.id %in% ids.to.keep)|> 
   mutate(
     wt = if(weight == 'inv.var') 1/age.var else {
       if (weight == 'CR') age.confidence else {
         if (weight == 'sn.wt') confidence.wt else 1
       }
-    }) |> 
+    }) 
+
+model.df <- age.df |> 
   left_join(
     logit.meth.normal.params |> 
       select(swfsc.id, loc.site, mean.logit) |>
@@ -42,40 +42,40 @@ lapply(model.df$swfsc.id, function(cv.id) {
   saveRDS(paste0('R/glmnet/glmnet_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '_', weight, '.rds'))
 
 
-# # Random age and best methylation estimates -------------------------------
-# 
-# parallel::mclapply(1:nrep, function(j) {
-#   # random sample of ages and methylation - only use random age
-#   ran.df <- model.df |> 
-#     left_join(
-#       sampleAgeMeth(age.df, logit.meth.normal.params) |> 
-#         select(swfsc.id, age.ran),
-#       by = 'swfsc.id'
-#     )
-#   
-#   train.df <- filter(ran.df, age.confidence >= minCR)
-#   lapply(ran.df$swfsc.id, function(cv.id) {
-#     fitTrainENR(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', optimum.alpha$par) |> 
-#       predictTestENR(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran')
-#   }) |> 
-#     bind_rows() 
-# }, mc.cores = ncores) |> 
-#   bind_rows() |> 
-#   saveRDS(paste0('R/glmnet/glmnet_ran_age_minCR', minCR, '_', sites.2.use, '.rds'))
-# 
-# 
-# # Random age and random methylation estimates -----------------------------
-# 
-# parallel::mclapply(1:nrep, function(j) {
-#   # random sample of ages and methylation
-#   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params) 
-#   
-#   train.df <- filter(ran.df, age.confidence >= minCR)
-#   lapply(ran.df$swfsc.id, function(cv.id) {
-#     fitTrainENR(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', optimum.alpha$par) |> 
-#       predictTestENR(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran')
-#   }) |> 
-#     bind_rows() 
-# }, mc.cores = ncores) |> 
-#   bind_rows() |> 
-#   saveRDS(paste0('R/glmnet/glmnet_ran_age_meth_minCR', minCR, '_', sites.2.use, '.rds'))
+# Random age and best methylation estimates -------------------------------
+
+parallel::mclapply(1:nrep, function(j) {
+  # random sample of ages and methylation - only use random age
+  ran.df <- model.df |>
+    left_join(
+      sampleAgeMeth(age.df, logit.meth.normal.params) |>
+        select(swfsc.id, age.ran),
+      by = 'swfsc.id'
+    )
+
+  train.df <- filter(ran.df, age.confidence >= minCR)
+  lapply(ran.df$swfsc.id, function(cv.id) {
+    fitTrainENR(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', optimum.alpha, age.transform) |>
+      predictTestENR(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran', age.transform)
+  }) |>
+    bind_rows()
+}, mc.cores = ncores) |>
+  bind_rows() |>
+  saveRDS(paste0('R/glmnet/glmnet_ran_age_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+
+
+# Random age and random methylation estimates -----------------------------
+
+parallel::mclapply(1:nrep, function(j) {
+  # random sample of ages and methylation
+  ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
+
+  train.df <- filter(ran.df, age.confidence >= minCR)
+  lapply(ran.df$swfsc.id, function(cv.id) {
+    fitTrainENR(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', optimum.alpha, age.transform) |>
+      predictTestENR(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran', age.transform)
+  }) |>
+    bind_rows()
+}, mc.cores = ncores) |>
+  bind_rows() |>
+  saveRDS(paste0('R/glmnet/glmnet_ran_age_meth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
