@@ -42,18 +42,25 @@ MAE.all <- left_join(
       left_join(age.df) |> 
       filter(age.confidence %in% c(4,5)) |> 
       group_by(method, sites, weight, minCR, resample) |> 
-      summarise(MAE = median(dev)),
+      summarise(MAE = round(median(dev), 2)),
     pred |> 
       left_join(age.df) |> 
       filter(age.confidence %in% c(4,5)) |> 
-      group_by(method, sites, weight, minCR) |> 
-      summarise(lci = quantile(dev, probs = c(.25)))
+      group_by(method, sites, weight, minCR, resample) |> 
+      summarise(lci = round(quantile(dev, probs = c(.25)),2))
   ),
   pred |> 
     left_join(age.df) |> 
     filter(age.confidence %in% c(4,5)) |> 
-    group_by(method, sites, weight, minCR) |> 
-    summarise(uci = quantile(dev, probs = c(.75)))
+    group_by(method, sites, weight, minCR, resample) |> 
+    summarise(uci = round(quantile(dev, probs = c(.75)),2))
+) |> 
+  left_join(
+  pred |> 
+    left_join(age.df) |> 
+    filter(age.confidence %in% c(4,5)) |> 
+    group_by(method, sites, weight, minCR, resample) |> 
+    summarise(Corr = round(cor.test(age.best, age.pred, method = "pearson")$estimate,2))
 )
 write.csv(MAE.all, file = 'R/summaries/MAE.all.csv')
 
@@ -69,21 +76,143 @@ models.2.plot <- c(
   'ranAgeMeth_minCR4_RFsites_ln_none'
 )
 
-pred.2.plot <- filter(pred, model %in% models.2.plot) |> 
-  mutate(
-    model.name = case_when(
-      model == 'minCR_4_RFsites_none_best' ~ '1Base',
-      model == 'minCR_4_Allsites_none_best' ~ '2Allsites',
-      model == 'minCR_4_glmnet.5_none_best' ~ '3glmnetsites',
-      model == 'minCR_2_RFsites_none_best' ~ '4unweighted',
-      model == 'minCR_2_RFsites_CR_best' ~ '5CR',
-      model == 'minCR_2_RFsites_sn.wt_best' ~ '6sn.wt',
-      model == 'minCR_2_RFsites_inv.var_best' ~ '7inv.var',
-      model == 'minCR_4_RFsites_none_RanAge' ~ '8RanAge',
-      model == 'minCR_4_RFsites_none_RanAgeMeth' ~ '9RanAgeMeth',
-      .default = 'other'
+pred.2.plot <- filter(pred, model %in% models.2.plot) 
+pred.2.plot$model <- factor(pred.2.plot$model, levels = models.2.plot, ordered = TRUE) 
+
+# Base model box plot
+
+df <- pred.2.plot |> 
+  filter(model == 'best_minCR4_RFsites_ln_none') |> 
+  left_join(age.df)
+base.plot <- lapply(c('gam', 'glmnet', 'rf', 'svm'), function(m){
+  p <- plot.loov.res(filter(df, method == m), 4)$p.loov + 
+    ggtitle(m) 
+  #    p$theme$title <- element_text(m)
+  return(p)
+})
+names(base.plot) <- c('svm', 'gam', 'glmnet', 'rf')
+base.plot$nrow = 2
+jpeg(file = 'R/summaries/base.model.plot.jpg', width = 1200, height = 1200)
+do.call(grid.arrange, base.plot)
+dev.off()
+
+box.plot <- 
+  pred.2.plot |> 
+  filter(model == 'best_minCR4_RFsites_ln_none') |> 
+  left_join(age.df) |> 
+  filter(age.confidence %in% c(4,5)) |> 
+  ggplot() +
+  geom_boxplot(aes(x = method, y = dev)) +
+  scale_x_discrete(labels = c('GAM', 'ENR', 'RF', 'SVM')) +
+  labs(x = "Method",
+       y = "Absolute age error (yrs)") +  
+  theme(text = element_text(size = 24))
+jpeg(file = 'R/summaries/base.model.boxplot.jpg', width = 700, height = 1200)
+box.plot
+dev.off()
+
+# Site selection box plot
+
+box.plot <- 
+  pred.2.plot |> 
+  filter(model %in% c('best_minCR4_RFsites_ln_none', 
+                      'best_minCR4_Allsites_ln_none',
+                      'best_minCR4_glmnet.5_ln_none')) |> 
+  left_join(age.df) |> 
+  filter(age.confidence %in% c(4,5)) |> 
+  mutate(sites = factor(sites, levels = c('RFsites', 'glmnet.5', 'Allsites'), ordered = TRUE)) |> 
+  #  mutate(age.conficence = as.factor(age.confidence)) |> 
+  #  mutate(minCR = as.factor(minCR)) |> 
+  ggplot() +
+  geom_boxplot(aes(x = sites, y = dev)) +
+  scale_x_discrete(labels = c('RF sites', 'ENR sites', 'All sites')) +
+  #  ylim(c(0,20)) +
+  labs(x = "CpG set used",
+       y = "Absolute age error (yrs)") +  
+  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 45, hjust=1))+
+  facet_wrap(~method, nrow = 1, labeller = labeller(method = c(
+    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+  )))
+jpeg(file = 'R/summaries/site.selection.boxplot.jpg', width = 700, height = 1200)
+box.plot
+dev.off()
+
+
+# minCR and weight box plot
+
+box.plot <- 
+  pred.2.plot |> 
+  filter(model %in% c('best_minCR4_RFsites_ln_none', 
+                      'best_minCR2_RFsites_ln_none', 
+                      'best_minCR2_RFsites_ln_CR',
+                      'best_minCR2_RFsites_ln_sn.wt')) |> 
+  left_join(age.df) |> 
+  filter(age.confidence %in% c(4,5)) |> 
+  mutate(weight = factor(weight, levels = c('none', 'CR', 'sn.wt'), ordered = TRUE)) |> 
+  #  mutate(age.conficence = as.factor(age.confidence)) |> 
+  #  mutate(minCR = as.factor(minCR)) |> 
+  ggplot() +
+  geom_boxplot(aes(x = model, y = dev)) +
+  scale_x_discrete(labels = c('Base', 'Unweighted', 'CR', 'SN weight')) +
+  #  ylim(c(0,20)) +
+  labs(x = "Weight scheme",
+       y = "Absolute age error (yrs)") +  
+  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 45, hjust=1))+
+  facet_wrap(~method, nrow = 1, labeller = labeller(method = c(
+    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+  )))
+jpeg(file = 'R/summaries/minCR.weight.boxplot.jpg', width = 700, height = 900)
+box.plot
+dev.off()
+
+# compare duplicates
+age.df$date.biopsy <- as.POSIXct(age.df$date.biopsy, format = '%Y-%m-%d %H:%M:%S') %>% 
+  as.Date()
+
+pair.sum <- lapply(
+  select(age.df, c(crc.id, swfsc.id, date.biopsy)) |> 
+    filter(n() > 1, .by = crc.id) |> 
+    pull(crc.id) |> 
+    unique(), 
+  function(i){
+    inds <- filter(age.df, crc.id == i) %>% arrange(date.biopsy)
+    c(
+      pair.id = i,
+      old.ind = inds$swfsc.id[2], 
+      young.ind = inds$swfsc.id[1], 
+      age.diff = difftime(inds$date.biopsy[2], inds$date.biopsy[1], units = "days")/365
     )
-  )
+  }) |> bind_rows() 
+
+age.diff <- lapply(c('gam','glmnet', 'rf', 'svm'), function(mthd){
+  mthd.df <- filter(pred, method == mthd & resample == 'best')
+  lapply(unique(mthd.df$model), function(mdl){
+    df <- filter(mthd.df, model == mdl)
+    do.call(rbind, lapply(1:nrow(pair.sum), function(i){
+      return(data.frame(
+        pair.id = pair.sum$pair.id[i],
+        method = mthd,
+        model = mdl,
+        pred.diff = filter(df, swfsc.id == pair.sum$old.ind[i])$age.pred - filter(df, swfsc.id == pair.sum$young.ind[i])$age.pred
+      ))
+    }) )
+  }) |> bind_rows()
+}) |> bind_rows()
+
+pair.plot <- filter(age.diff, model == 'best_minCR4_RFsites_ln_none') |> 
+  left_join(pair.sum) |> 
+  ggplot() +
+  geom_point(aes(x = as.numeric(age.diff), y = pred.diff)) +
+  geom_abline(slope = 1, intercept = 0) +
+  facet_wrap(~method, nrow = 2, labeller = labeller(method = c(
+    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+  )))
+pair.plot
+
+###########################################################################
+# code I'm not currently using 
+
+
 box.plot <- 
   pred.2.plot |> 
   left_join(age.df) |> 
@@ -92,14 +221,13 @@ box.plot <-
   mutate(minCR = as.factor(minCR)) |> 
   ggplot() +
   geom_boxplot(aes(x = model, y = dev)) +
-  labs(x = "Model",
+  labs(x = "",
        y = "Absolute age error (yrs)") +  
-  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 30, hjust=1)) +
-  #  facet_wrap(~method, nrow = 1)
+  theme(text = element_text(size = 24), axis.text.x = element_blank()) +
   facet_wrap(~method, nrow = 2,labeller = labeller(method = c(
     'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
   )))
-jpeg(file = 'R/summaries/model.boxplot.jpg', width = 1200, height = 2400)
+jpeg(file = 'R/summaries/model.boxplot.jpg', width = 1200, height = 1800)
 box.plot
 dev.off()
 
@@ -116,22 +244,6 @@ plots <-
   })
 
 
-
-
-
-# code I'm not currently using --------------------------------------------
-
-# pred <- do.call(rbind, lapply(c('svm', 'rf', 'glmnet', 'gam'), function(m){
-#   do.call(rbind, lapply(minCRs, function(cr){
-#     readRDS(paste0('R/', m, '/', m, '_best_minCR', cr, '_', sites.2.use, '_ln.rds')) |>
-#       select(c('swfsc.id', 'age.resp', 'age.pred', 'resid', 'dev', 'sq.err')) |> 
-#       rename(age.best = age.resp) |>
-#       mutate(method = m) |> 
-#       mutate(minCR = cr)
-#   }))
-# }))
-
-# Base-case: minCR = 4, weight = none, compare methods and site selection
 
 base.res <-   pred |> 
   left_join(age.df) |> 
@@ -243,9 +355,7 @@ MAE.by.age <- do.call(cbind, lapply(1:length(dat), function(i){
 }))
 write.csv(MAE.by.age, file = paste0("R/summaries/MAE.by.age.across.methods-minCR", minCR, "_", sites.2.use, ".csv"))
 
-# compare duplicates
-age.df$date.biopsy <- as.POSIXct(age.df$date.biopsy, format = '%Y-%m-%d %H:%M:%S') %>% 
-  as.Date()
+#compare duplicates  
 dupe.sum <- do.call(bind_rows, lapply(1:length(dat), function(m){
   dupes <- left_join(dat[[m]], select(age.df, c(crc.id, swfsc.id, date.biopsy))) %>% 
     filter(n() > 1, .by = crc.id)
