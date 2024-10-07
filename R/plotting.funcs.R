@@ -32,37 +32,33 @@ p.cluster.distribution <- function(dat) {
 # plot loov results by min.CR
 plot.loov.res <- function(loov.res, min.CR) {# expected argument is loov.res
   dat <- filter(loov.res, age.confidence >= min.CR)
-  med.dev <- group_by(dat, age.confidence) %>% summarise(round(median(dev),2))
-  names(med.dev) <- c("CR", "median.dev")
+  med.dev <- dat |> summarise(MAE = round(median(dev),2))
+  cor.coeff <- round(cor.test(dat$age.best, dat$age.pred, method = "pearson")$estimate,2)
   loov.regress <- do.call(rbind,lapply(min.CR:5, function(cr){
     dat.filtered <- filter(dat, age.confidence == cr)
     regr <- lm(age.pred~age.best, data = dat.filtered)$coefficients
     names(regr) <- c("intercept", "slope")
-    
-    cor.coeff <- round(cor.test(dat.filtered$age.best, dat.filtered$age.pred, method = "pearson")$estimate,2)
-    return(c(cor.coeff, regr))
+
+    return(regr)
   }))
-  colnames(loov.regress)[1] <- "Corr"
-  fit.sum <- bind_cols(med.dev, loov.regress)
+  fit.sum <- bind_cols(MAE = med.dev, Corr = cor.coeff, loov.regress)
   
   p.loov <- ggplot(dat) +
     geom_abline(slope = 1, color = "black", linewidth = 0.5, linetype = 2) +
     geom_point(aes(x = age.best, y = age.pred, col = as.character(age.confidence)), size = 3) +
-    annotation_custom(tableGrob(fit.sum[,1:3], theme = ttheme_minimal(base_size = 10), rows = NULL), xmin = 30, xmax = 40, ymin = 0, ymax = 10) +
+    annotation_custom(tableGrob(fit.sum[1,1:2], theme = ttheme_minimal(base_size = 20), rows = NULL), xmin = 30, xmax = 40, ymin = 0, ymax = 10) +
     scale_color_manual(values = conf.palette, name = "Confidence") +
-    ggtitle(paste0("LOOV min CR = ", min.CR)) +
-    labs(x = "Age.best", y = "LOOCV predicted age") +
-    #  facet_wrap(~ sex, ncol = 1) +
-    xlim(0,40) + ylim(0,52) +
+    labs(x = "Age.best", y = "Predicted age") +
+    xlim(0,40) + ylim(0,58) +
     theme_minimal() +
     theme(
-      text = element_text(size = 15),
+      text = element_text(size = 24),
       legend.position = c(0.2, 0.8)
     )
   for(i in 1:nrow(fit.sum)){
     cr <- i+(min.CR-1)
     p.loov <- p.loov + 
-      geom_abline(slope = filter(fit.sum, CR == cr)$slope, intercept = filter(fit.sum, CR == cr)$intercept, color = conf.palette[cr])
+      geom_abline(slope = fit.sum$slope[i], intercept = fit.sum$intercept[i], color = conf.palette[cr])
   }
   return(list(p.loov = p.loov, fit.sum = fit.sum))
 }
