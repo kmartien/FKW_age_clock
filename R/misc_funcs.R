@@ -271,7 +271,7 @@ predictTestRF <- function(fit, test.df, sites, resp, age.transform){
 
   pred <- 
     if(is.null(fit)){
-      fitTrainRF(train.df, sites, resp, rf.params, age.transform)$predicted
+      fitTrainRF(test.df, sites, resp, rf.params, age.transform)$predicted
     } else {
       predict(
         fit, 
