@@ -2,12 +2,13 @@ rm(list = ls())
 library(tidyverse)
 library(mgcv)
 source('R/misc_funcs.R')
+source('R/calc.ci.wt.R')
 load("data/age_and_methylation_data.rdata")
 
 sites.2.use <- 'RFsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
 minCR <- 4
 age.transform <- 'ln'
-weight <- 'none' # 'CR', 'inv.var', 'sn.wt', 'none'
+weight <- 'ci.wt' # 'CR', 'inv.var', 'sn.wt', 'none'
 nrep <- 1000
 ncores <- 10
 
@@ -29,6 +30,7 @@ model.df <- age.df |>
       pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
     by = 'swfsc.id'
   )
+if(weight == 'ci.wt') model.df$wt <- calc.ci.wt(model.df, logit.meth.normal.params)
 
 train.df <- filter(model.df, age.confidence >= minCR)
 
@@ -37,15 +39,15 @@ if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 
 # Best age and methylation estimates --------------------------------------
 
-# message(format(Sys.time()), ' : Best - All')
-# pred <- if (minCR == 2){
-#   # LOO cross validation for all samples
-#   lapply(model.df$swfsc.id, function(cv.id) {
-#     fitTrainGAM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', age.transform) |> 
-#       predictTestGAM(filter(model.df, swfsc.id == cv.id), 'age.best', age.transform)
-#   })|> bind_rows() 
-# } else {predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform)}
-# saveRDS(pred, paste0('R/gam/gam_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+message(format(Sys.time()), ' : Best - All')
+pred <- if (minCR == 2){
+  # LOO cross validation for all samples
+  lapply(model.df$swfsc.id, function(cv.id) {
+    fitTrainGAM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', age.transform) |>
+      predictTestGAM(filter(model.df, swfsc.id == cv.id), 'age.best', age.transform)
+  })|> bind_rows()
+} else {predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform)}
+saveRDS(pred, paste0('R/gam/gam_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
 # Random age and best methylation estimates -------------------------------
 
