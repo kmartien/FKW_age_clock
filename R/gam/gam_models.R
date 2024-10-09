@@ -5,7 +5,7 @@ source('R/misc_funcs.R')
 load("data/age_and_methylation_data.rdata")
 
 sites.2.use <- 'RFsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
-minCR <- 4
+minCR <- 2
 age.transform <- 'ln'
 weight <- 'none' # 'CR', 'inv.var', 'sn.wt', 'none'
 nrep <- 1000
