@@ -70,7 +70,7 @@ conf.map <- read_csv(
   as.matrix()
 age.df <- crc.data[, crc.cols] |> 
   mutate( 
-    confidence.wt = unname(conf.map["mk", age.confidence]),
+    confidence.wt = unname(conf.map["sd", age.confidence]),
     date.biopsy = as.POSIXct(date.biopsy, format = "%m/%d/%y"),
     sex.num = as.numeric(factor(sex))
   )  |> 

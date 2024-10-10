@@ -1,11 +1,11 @@
-calc.ci.wt <- function(model.df, logit.meth.normal.params, ndraws = 1000){
+calc.ci.wt <- function(model.df, ndraws = 1000){
   left_join(
     model.df |> 
       mutate(age.confidence = factor(age.confidence)), 
     
     bind_rows(
       lapply(1:ndraws, function(i){
-        sampleAgeMeth(model.df, logit.meth.normal.params) |>
+        mutate(model.df, age.ran = ranAges(model.df)) |> 
           select(swfsc.id, age.ran)
       })) |> 
       group_by(swfsc.id) |> 

@@ -115,6 +115,27 @@ sampleAgeMeth <- function(ages, meth) {
     ) 
 }
 
+calc.ci.wt <- function(model.df, ndraws = 1000){
+  left_join(
+    model.df |> 
+      mutate(age.confidence = factor(age.confidence)), 
+    
+    bind_rows(
+      lapply(1:ndraws, function(i){
+        mutate(model.df, age.ran = ranAges(model.df)) |> 
+          select(swfsc.id, age.ran)
+      })) |> 
+      group_by(swfsc.id) |> 
+      summarise(lci = quantile(age.ran, probs = c(0.25)),
+                uci = quantile(age.ran, probs = c(0.75)),
+                ci.range = uci - lci) |> 
+      select(swfsc.id, ci.range)
+  ) |> 
+    mutate(ci.wt = 1 - (ci.range / age.range),
+           ci.wt = (ci.wt - 0.3) / 0.4) |> 
+    pull(ci.wt)
+}
+
 selectCpGsites <- function(sites.2.use){
   if(sites.2.use == 'RFsites'){
     # select important sites from Random Forest tuned with all samples
@@ -304,28 +325,6 @@ predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params, age.tran
   ) 
 }
   
-  
-#   fit <- fitTrainRF(train.df, sites, resp, rf.params, age.transform)
-#   rbind( 
-#     # OOB for CR 4 & 5
-#     tibble(
-#       swfsc.id = train.df$swfsc.id,
-#       age.resp = train.df[[resp]],
-#       age.pred = fit$predicted
-#       ),
-#     # full CR 4 & 5 model to predict CR 2 & 3
-#     predictTestRF(fit, filter(model.df, age.confidence %in% 2:3), sites, resp, age.transform)
-#   ) |> 
-#     mutate(
-#       age.pred = if (age.transform == 'ln') exp(age.pred) else age.pred,
-#       age.pred = ifelse(age.pred < 0, 0, age.pred),
-#       age.pred = ifelse(age.pred > 80, 80, age.pred),
-#       resid = age.pred - age.resp,
-#       dev = abs(resid),
-#       sq.err = resid ^ 2
-#     )
-# }
-
 fitTrainENR <- function(df, sites, resp, alpha, age.transform) {
   if (age.transform == 'ln') df[[resp]] <- log(df[[resp]])
   fit <- cv.glmnet(

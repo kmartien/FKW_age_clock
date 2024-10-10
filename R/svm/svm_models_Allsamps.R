@@ -31,19 +31,24 @@ model.df <- age.df |>
     by = 'swfsc.id'
   ) 
 
-# # Best age and methylation estimates --------------------------------------
-# 
-# # LOO cross validation for all samples
-# lapply(model.df$swfsc.id, function(cv.id) {
-#   fitTrainSVM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', svm.params, age.transform) |> 
-#     predictTestSVM(filter(model.df, swfsc.id == cv.id), sites, 'age.best', age.transform)
-# }) |> bind_rows() |>
-#   saveRDS(paste0('R/svm/svm_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '.rds'))
-# 
+# Best age and methylation estimates --------------------------------------
+
+##########################################
+# Loop through all site selection options
+lapply(c('Allsites', 'RFsites', 'glmnet.5'), function(sites.2.use){
+  sites <- sites.to.keep
+  if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
+# LOO cross validation for all samples
+pred.best <- lapply(model.df$swfsc.id, function(cv.id) {
+  fitTrainSVM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', svm.params, age.transform) |>
+    predictTestSVM(filter(model.df, swfsc.id == cv.id), sites, 'age.best', age.transform)
+}) |> bind_rows()
+saveRDS(pred.best, paste0('R/svm/svm_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+})
 
 # Random age and best methylation estimates -------------------------------
 
-parallel::mclapply(1:nrep, function(j) {
+pred.ranAge <- parallel::mclapply(1:nrep, function(j) {
   # random sample of ages and methylation - only use random age
   ran.df <- model.df |>
     left_join(
@@ -51,27 +56,27 @@ parallel::mclapply(1:nrep, function(j) {
         select(swfsc.id, age.ran),
       by = 'swfsc.id'
     )
-
+  
   lapply(ran.df$swfsc.id, function(cv.id) {
     fitTrainSVM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', svm.params, age.transform) |>
       predictTestSVM(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran', age.transform)
   }) |> bind_rows()
 }, mc.cores = ncores) |>
-  bind_rows() |>
-  saveRDS(paste0('R/svm/svm_ranAge_minCR', minCR, '_', sites.2.use, '_', age.transform, '.rds'))
+  bind_rows()
+saveRDS(pred.ranAge, paste0('R/svm/svm_ranAge_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
 
 # Random age and random methylation estimates -----------------------------
 
-parallel::mclapply(1:nrep, function(j) {
+pred.ranAgeMeth <- parallel::mclapply(1:nrep, function(j) {
   # random sample of ages and methylation
   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
-
+  
   lapply(ran.df$swfsc.id, function(cv.id) {
     fitTrainSVM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', svm.params, age.transform) |>
       predictTestSVM(filter(ran.df, swfsc.id == cv.id), sites, 'age.ran', age.transform)
   }) |> bind_rows()
 }, mc.cores = ncores) |>
-  bind_rows() |>
-  saveRDS(paste0('R/svm/svm_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '.rds'))
+  bind_rows()
+saveRDS(pred.ranAgeMeth, paste0('R/svm/svm_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 

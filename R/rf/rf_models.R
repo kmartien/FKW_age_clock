@@ -4,10 +4,11 @@ library(randomForest)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 
-minCR <- 4
+minCR <- 2
 sites.2.use <- 'RFsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
 age.transform <- 'ln'
 weight <- 'none' # 'CR', 'inv.var', 'sn.wt', 'none'
+if (weight == 'ci.wt') age.df$ci.wt <- calc.ci.wt(age.df)
 nrep <- 1000
 ncores <- 10
 
@@ -20,7 +21,7 @@ rf.params <- rf.params[[sites.2.use]]
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)|> 
   mutate(
-    wt = if(weight == 'inv.var') 1/age.var else {
+    wt = if (weight == 'ci.wt') ci.wt else{
       if (weight == 'CR') age.confidence else {
         if (weight == 'sn.wt') confidence.wt else 1
       }
@@ -44,47 +45,44 @@ pred <- if(minCR == 2) {
   predictTestRF(fit = NULL, train.df, sites, 'age.best', age.transform)
 } else {
   predictAllIDsRF(train.df, model.df, sites, 'age.best', rf.params, age.transform)  
-  }
+}
 saveRDS(pred, paste0('R/rf/rf_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
-
 
 # Random age and best methylation estimates -------------------------------
 
-print('RanAge')
-#pred <- parallel::mclapply(1:nrep, function(j) {
-pred <- lapply(1:nrep, function(j) {
-  # random sample of ages and methylation - only use random age
-  ran.df <- model.df |>
-    left_join(
-      sampleAgeMeth(age.df, logit.meth.normal.params) |>
-        select(swfsc.id, age.ran),
-      by = 'swfsc.id'
-    )
-
-  if(minCR == 2) {
-    # OOB predictions for training samples
-    predictTestRF(fit = NULL, ran.df, sites, 'age.ran', age.transform)
-  } else {
-    predictAllIDsRF(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', rf.params, age.transform)  
-  }
-#}, mc.cores = ncores) |> bind_rows()
-}) |> bind_rows()
-  saveRDS(pred, paste0('R/rf/rf_ranAge_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
-
-
-# Random age and random methylation estimates -----------------------------
-
-print('RanAgeMeth')
-parallel::mclapply(1:nrep, function(j) {
-  # random sample of ages and methylation
-  ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
-
-  if(minCR == 2) {
-    # OOB predictions for training samples
-    predictTestRF(fit = NULL, ran.df, sites, 'age.ran', age.transform)
-  } else {
-    predictAllIDsRF(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', rf.params, age.transform)  
-  }
-}, mc.cores = ncores) |>
-  bind_rows() |>
-  saveRDS(paste0('R/rf/rf_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+# print('RanAge')
+# pred <- parallel::mclapply(1:nrep, function(j) {
+#   # random sample of ages and methylation - only use random age
+#   ran.df <- model.df |>
+#     left_join(
+#       sampleAgeMeth(age.df, logit.meth.normal.params) |>
+#         select(swfsc.id, age.ran),
+#       by = 'swfsc.id'
+#     )
+# 
+#   if(minCR == 2) {
+#     # OOB predictions for training samples
+#     predictTestRF(fit = NULL, ran.df, sites, 'age.ran', age.transform)
+#   } else {
+#     predictAllIDsRF(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', rf.params, age.transform)
+#   }
+# }, mc.cores = ncores) |> bind_rows()
+#   saveRDS(pred, paste0('R/rf/rf_ranAge_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+# 
+# 
+# # Random age and random methylation estimates -----------------------------
+# 
+# print('RanAgeMeth')
+# pred <- parallel::mclapply(1:nrep, function(j) {
+#   # random sample of ages and methylation
+#   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
+# 
+#   if(minCR == 2) {
+#     # OOB predictions for training samples
+#     predictTestRF(fit = NULL, ran.df, sites, 'age.ran', age.transform)
+#   } else {
+#     predictAllIDsRF(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', rf.params, age.transform)
+#   }
+# }, mc.cores = ncores) |>
+#   bind_rows()
+#   saveRDS(pred, paste0('R/rf/rf_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))

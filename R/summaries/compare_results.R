@@ -11,7 +11,7 @@ age.df <- age.df |>
 
 minCRs <- c(2, 4)
 sites.2.use <- c('RFsites', 'glmnet.5', 'Allsites')
-wts.2.use <- c('CR', 'sn.wt', 'none')
+wts.2.use <- c('CR', 'ci.wt', 'none')
 
 res.files <- bind_rows(
   lapply(c('svm', 'gam', 'glmnet', 'rf'), function(m){
@@ -187,8 +187,10 @@ box.plot <-
   pred |> 
   filter(model %in% c('best_minCR4_RFsites_ln_none',
                       'ranAge_minCR4_RFsites_ln_none',
+                      'ranAgeMeth_minCR4_RFsites_ln_none',
                       'best_minCR2_RFsites_ln_none',
-                      'ranAge_minCR2_RFsites_ln_none')) |> 
+                      'ranAge_minCR2_RFsites_ln_none',
+                      'ranAgeMeth_minCR2_RFsites_ln_none')) |> 
   left_join(age.df) |> 
   filter(age.confidence %in% c(4,5)) |> 
   #  mutate(age.conficence = as.factor(age.confidence)) |> 
