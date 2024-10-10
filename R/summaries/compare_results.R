@@ -43,7 +43,7 @@ pred <- bind_rows(
          model = paste(resample, minCR, sites, age.transform, weight, sep = '_')), 
 
 left_join(
-  filter(res.files, resample == 'ranAge'),
+  filter(res.files, resample != 'best'),
   lapply(1:nrow(res.files), function(f){
     data.frame(fname = res.files$fname[f], readRDS(paste0('R/', res.files$method[f], '/', res.files$fname[f])))
   }) |> bind_rows(),
@@ -186,17 +186,16 @@ dev.off()
 box.plot <- 
   pred |> 
   filter(model %in% c('best_minCR4_RFsites_ln_none',
-                      'ranAge_minCR2_RFsites_ln_none',
-                      'ranAgeMeth_minCR2_RFsites_ln_none',
                       'ranAge_minCR4_RFsites_ln_none',
-                      'ranAgeMeth_minCR4_RFsites_ln_none')) |> 
+                      'best_minCR2_RFsites_ln_none',
+                      'ranAge_minCR2_RFsites_ln_none')) |> 
   left_join(age.df) |> 
   filter(age.confidence %in% c(4,5)) |> 
   #  mutate(age.conficence = as.factor(age.confidence)) |> 
   #  mutate(minCR = as.factor(minCR)) |> 
   ggplot() +
   geom_boxplot(aes(x = model, y = dev)) +
-  scale_x_discrete(labels = c('Base', 'Allsamps, Age', 'Allsamps, Age & Meth', 'HCsamps, Age', 'HCsamps, Age & Meth')) +
+#  scale_x_discrete(labels = c('HCsamps, best', 'HCsamps, Age', 'Allsamps, Age', 'Allsamps, Age')) +
 #  ylim(c(0,25)) +
   labs(x = "Resampling",
        y = "Absolute age error (yrs)") +  

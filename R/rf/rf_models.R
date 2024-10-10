@@ -79,12 +79,11 @@ parallel::mclapply(1:nrep, function(j) {
   # random sample of ages and methylation
   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
 
-  train.df <- filter(ran.df, age.confidence >= minCR)
   if(minCR == 2) {
     # OOB predictions for training samples
-    predictTestRF(fit = NULL, train.df, sites, 'age.ran', age.transform)
+    predictTestRF(fit = NULL, ran.df, sites, 'age.ran', age.transform)
   } else {
-    predictAllIDsRF(train.df, ran.df, sites, 'age.ran', rf.params, age.transform)  
+    predictAllIDsRF(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', rf.params, age.transform)  
   }
 }, mc.cores = ncores) |>
   bind_rows() |>
