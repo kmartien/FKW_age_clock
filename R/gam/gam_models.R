@@ -51,35 +51,35 @@ saveRDS(pred.best, paste0('R/gam/gam_best_minCR', minCR, '_', sites.2.use, '_', 
 
 # Random age and best methylation estimates -------------------------------
 
-# message(format(Sys.time()), ' : RanAge - All')
-# pred.ranAge <- parallel::mclapply(1:nrep, function(j) {
-#   ran.df <- model.df |>
-#     left_join(
-#       sampleAgeMeth(age.df, logit.meth.normal.params) |>
-#         select(swfsc.id, age.ran),
-#       by = 'swfsc.id'
-#     )
-#   if (minCR == 2){
-#     # LOO cross validation for all samples
-#     lapply(model.df$swfsc.id, function(cv.id) {
-#       fitTrainGAM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', age.transform) |> 
-#         predictTestGAM(filter(ran.df, swfsc.id == cv.id), 'age.ran', age.transform)
-#     })|> bind_rows() 
-#   } else {predictAllIDsGAM(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', age.transform)}
-# }, mc.cores = ncores) |> bind_rows()
-# saveRDS(pred.ranAge, paste0('R/gam/gam_ranAge_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
-# 
-# # Random age and random methylation estimates -----------------------------
-# 
-# message(format(Sys.time()), ' : RanAgeMeth - All')
-# pred.ranAgeMeth <- parallel::mclapply(1:nrep, function(j) {
-#   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
-#   if (minCR == 2){
-#     # LOO cross validation for all samples
-#     lapply(model.df$swfsc.id, function(cv.id) {
-#       fitTrainGAM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', age.transform) |> 
-#         predictTestGAM(filter(ran.df, swfsc.id == cv.id), 'age.ran', age.transform)
-#     })|> bind_rows() 
-#   } else {predictAllIDsGAM(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', age.transform)}
-# }, mc.cores = ncores) |> bind_rows()
-# saveRDS(pred.ranAgeMeth, paste0('R/gam/gam_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+message(format(Sys.time()), ' : RanAge - All')
+pred.ranAge <- parallel::mclapply(1:nrep, function(j) {
+  ran.df <- model.df |>
+    left_join(
+      sampleAgeMeth(age.df, logit.meth.normal.params) |>
+        select(swfsc.id, age.ran),
+      by = 'swfsc.id'
+    )
+  if (minCR == 2){
+    # LOO cross validation for all samples
+    lapply(model.df$swfsc.id, function(cv.id) {
+      fitTrainGAM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', age.transform) |>
+        predictTestGAM(filter(ran.df, swfsc.id == cv.id), 'age.ran', age.transform)
+    })|> bind_rows()
+  } else {predictAllIDsGAM(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', age.transform)}
+}, mc.cores = ncores) |> bind_rows()
+saveRDS(pred.ranAge, paste0('R/gam/gam_ranAge_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+
+# Random age and random methylation estimates -----------------------------
+
+message(format(Sys.time()), ' : RanAgeMeth - All')
+pred.ranAgeMeth <- parallel::mclapply(1:nrep, function(j) {
+  ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
+  if (minCR == 2){
+    # LOO cross validation for all samples
+    lapply(model.df$swfsc.id, function(cv.id) {
+      fitTrainGAM(filter(ran.df, swfsc.id != cv.id), sites, 'age.ran', age.transform) |>
+        predictTestGAM(filter(ran.df, swfsc.id == cv.id), 'age.ran', age.transform)
+    })|> bind_rows()
+  } else {predictAllIDsGAM(filter(ran.df, age.confidence >= minCR), ran.df, sites, 'age.ran', age.transform)}
+}, mc.cores = ncores) |> bind_rows()
+saveRDS(pred.ranAgeMeth, paste0('R/gam/gam_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
