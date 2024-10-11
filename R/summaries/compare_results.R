@@ -90,13 +90,14 @@ pred.2.plot$model <- factor(pred.2.plot$model, levels = models.2.plot, ordered =
 df <- pred |> 
   filter(model == 'best_minCR4_RFsites_ln_none') |> 
   left_join(age.df)
+plot.titles <- data.frame(label = c('gam', 'glmnet', 'rf', 'svm'), title = c('GAM', 'ENR', 'RF', 'SVM'))
 base.plot <- lapply(c('gam', 'glmnet', 'rf', 'svm'), function(m){
   p <- plot.loov.res(filter(df, method == m), 4)$p.loov + 
-    ggtitle(m) 
+    ggtitle(plot.titles$title[which(plot.titles$label == m)]) 
   #    p$theme$title <- element_text(m)
   return(p)
 })
-names(base.plot) <- c('svm', 'gam', 'glmnet', 'rf')
+names(base.plot) <- c('GAM', 'ENR', 'RF', 'SVM')
 base.plot$nrow = 2
 jpeg(file = 'R/summaries/base.model.plot.jpg', width = 1200, height = 1200)
 do.call(grid.arrange, base.plot)
@@ -111,26 +112,27 @@ residuals.plot <-
   geom_abline(slope = 0, intercept = 0) +
   facet_wrap(~method)
 residuals.plot
+df |> filter(age.best > 24) |> group_by(method) |> filter(age.confidence > 3) |> summarise(mean.resid = mean(resid))
 
-box.plot <- 
-  pred.2.plot |> 
-  filter(model == 'best_minCR4_RFsites_ln_none') |> 
-  left_join(age.df) |> 
-  filter(age.confidence %in% c(4,5)) |> 
-  ggplot() +
-  geom_boxplot(aes(x = method, y = dev)) +
-  scale_x_discrete(labels = c('GAM', 'ENR', 'RF', 'SVM')) +
-  labs(x = "Method",
-       y = "Absolute age error (yrs)") +  
-  theme(text = element_text(size = 24))
-jpeg(file = 'R/summaries/base.model.boxplot.jpg', width = 700, height = 1200)
-box.plot
-dev.off()
+# box.plot <- 
+#   pred |> 
+#   filter(model == 'best_minCR4_RFsites_ln_none') |> 
+#   left_join(age.df) |> 
+#   filter(age.confidence %in% c(4,5)) |> 
+#   ggplot() +
+#   geom_boxplot(aes(x = method, y = dev)) +
+#   scale_x_discrete(labels = c('GAM', 'ENR', 'RF', 'SVM')) +
+#   labs(x = "Method",
+#        y = "Absolute age error (yrs)") +  
+#   theme(text = element_text(size = 24))
+# jpeg(file = 'R/summaries/base.model.boxplot.jpg', width = 700, height = 1200)
+# box.plot
+# dev.off()
 
 # Site selection box plot -----------------------------------------------
 
 box.plot <- 
-  pred.2.plot |> 
+  pred |> 
   filter(model %in% c('best_minCR4_RFsites_ln_none', 
                       'best_minCR4_Allsites_ln_none',
                       'best_minCR4_glmnet.5_ln_none')) |> 
@@ -157,14 +159,20 @@ dev.off()
 # minCR and weight box plot -----------------------------------------------
 
 box.plot <- 
-  pred.2.plot |> 
+  pred |> 
   filter(model %in% c('best_minCR4_RFsites_ln_none', 
                       'best_minCR2_RFsites_ln_none', 
                       'best_minCR2_RFsites_ln_CR',
-                      'best_minCR2_RFsites_ln_sn.wt')) |> 
+                      'best_minCR2_RFsites_ln_ci.wt')) |> 
+  mutate(model = factor(model, levels = 
+                          c('best_minCR4_RFsites_ln_none', 
+                            'best_minCR2_RFsites_ln_none', 
+                            'best_minCR2_RFsites_ln_CR',
+                            'best_minCR2_RFsites_ln_ci.wt'),
+                        ordered = TRUE)) |> 
   left_join(age.df) |> 
   filter(age.confidence %in% c(4,5)) |> 
-  mutate(weight = factor(weight, levels = c('none', 'CR', 'sn.wt'), ordered = TRUE)) |> 
+  mutate(weight = factor(weight, levels = c('none', 'CR', 'ci.wt'), ordered = TRUE)) |> 
   #  mutate(age.conficence = as.factor(age.confidence)) |> 
   #  mutate(minCR = as.factor(minCR)) |> 
   ggplot() +
@@ -190,14 +198,22 @@ box.plot <-
                       'ranAgeMeth_minCR4_RFsites_ln_none',
                       'best_minCR2_RFsites_ln_none',
                       'ranAge_minCR2_RFsites_ln_none',
-                      'ranAgeMeth_minCR2_RFsites_ln_none')) |> 
+                      'ranAgeMeth_minCR2_RFsites_ln_none')) |>
+  mutate(model = factor(model, levels = 
+                          c('best_minCR4_RFsites_ln_none',
+                            'ranAge_minCR4_RFsites_ln_none',
+                            'ranAgeMeth_minCR4_RFsites_ln_none',
+                            'best_minCR2_RFsites_ln_none',
+                            'ranAge_minCR2_RFsites_ln_none',
+                            'ranAgeMeth_minCR2_RFsites_ln_none'),
+                        ordered = TRUE)) |> 
   left_join(age.df) |> 
   filter(age.confidence %in% c(4,5)) |> 
   #  mutate(age.conficence = as.factor(age.confidence)) |> 
   #  mutate(minCR = as.factor(minCR)) |> 
   ggplot() +
   geom_boxplot(aes(x = model, y = dev)) +
-#  scale_x_discrete(labels = c('HCsamps, best', 'HCsamps, Age', 'Allsamps, Age', 'Allsamps, Age')) +
+  scale_x_discrete(labels = c('HCsamps, best', 'HCsamps, Age', 'HCsamps, Age&Meth', 'Allsamps, best', 'Allsamps, Age', 'Allsamps, Age&Meth')) +
 #  ylim(c(0,25)) +
   labs(x = "Resampling",
        y = "Absolute age error (yrs)") +  
@@ -228,6 +244,21 @@ pred.ran <-
          model = paste(resample, minCR, sites, age.transform, weight, sep = '_')) |>
   group_by(method, age.transform, sites, weight, minCR, resample) |>
   summarise(num.in.ci = sum(in.ci))
+pred.ran
+
+pred.age.dist.gam.ranAgeMeth <-
+  readRDS('R/gam/gam_ranAgeMeth_minCR2_RFsites_ln_none.rds') |> 
+  left_join(age.df) 
+age.dist <- lapply(2:5, function(cr){ 
+  ggplot(filter(pred.age.dist.gam.ranAgeMeth, age.confidence == cr)) +
+  geom_histogram(aes(x = age.pred, fill = factor(age.confidence))) + 
+    geom_vline(aes(xintercept = age.best), data = filter(age.df, age.confidence == cr)) +
+    scale_fill_manual(values = conf.colors)+
+  facet_wrap(~swfsc.id)
+})
+pdf(file = 'R/summaries/predicted.age.distributions.gam.ranAgeMeth.pdf')#, height = 2000, width = 2000)
+age.dist
+dev.off()
 
 # compare duplicates -----------------------------------------------
 
