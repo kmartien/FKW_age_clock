@@ -1,0 +1,7 @@
+,,Proportion of samples for which central 95th quantile of predicted age contains Agebest,
+,,Resampled variable,
+Method,Training sample set,Age,Age & Methylation
+GAM,All,0.66,0.92
+GAM,High confidence,0.7,0.94
+SVM,All,0.46,0.6
+SVM,High confidence,0.36,0.58
