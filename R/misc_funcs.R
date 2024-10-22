@@ -216,15 +216,15 @@ predictTestGAM <- function(fit, test.df, resp, age.transform){
 
 predictAllIDsGAM <- function(train.df, model.df, sites, resp, age.transform = 'none') {
   rbind( 
-    # cross-validation model for CR 4 & 5
+    # cross-validation model for training samples
     lapply(train.df$swfsc.id, function(cv.id) {
       fitTrainGAM(filter(train.df, swfsc.id != cv.id), sites, resp, age.transform) |> 
         predictTestGAM(filter(model.df, swfsc.id == cv.id), resp, age.transform)
     }) |> 
       bind_rows(),
-    # full CR 4 & 5 model to predict CR 2 & 3
+    # full model to predict test samples
     fitTrainGAM(train.df, sites, resp, age.transform) |> 
-      predictTestGAM(filter(model.df, age.confidence %in% 2:3), resp, age.transform)
+      predictTestGAM(filter(model.df, !swfsc.id %in% train.df$swfsc.id), resp, age.transform)
   ) 
 }
 
@@ -263,15 +263,15 @@ predictTestSVM <- function(fit, cv.df, sites, resp, age.transform){
 
 predictAllIDsSVM <- function(train.df, model.df, sites, resp, svm.params, age.transform = 'none') {
   rbind( 
-    # cross-validation model for CR 4 & 5
+    # cross-validation model for training samples
     lapply(train.df$swfsc.id, function(cv.id) {
       fitTrainSVM(filter(train.df, swfsc.id != cv.id), sites, resp, svm.params, age.transform) |> 
         predictTestSVM(filter(model.df, swfsc.id == cv.id), sites, resp, age.transform)
     }) |> 
       bind_rows(),
-    # full CR 4 & 5 model to predict CR 2 & 3
+    # full model to predict test samples
     fitTrainSVM(train.df, sites, resp, svm.params,age.transform) |> 
-      predictTestSVM(filter(model.df, age.confidence %in% 2:3), sites, resp, age.transform)
+      predictTestSVM(filter(model.df, !swfsc.id %in% train.df$swfsc.id), sites, resp, age.transform)
   ) 
 }
 
@@ -321,7 +321,7 @@ predictAllIDsRF <- function(train.df, model.df, sites, resp, rf.params, age.tran
         predictTestRF(fit = NULL, train.df, sites, resp, age.transform),
     # full model to predict test samples
     fitTrainRF(train.df, sites, resp, rf.params, age.transform) |> 
-      predictTestSVM(filter(model.df, age.confidence %in% 2:3), sites, resp, age.transform)
+      predictTestSVM(filter(model.df, !swfsc.id %in% train.df$swfsc.id), sites, resp, age.transform)
   ) 
 }
   
@@ -361,15 +361,15 @@ predictTestENR <- function(fit, cv.df, sites, resp, age.transform){
 
 predictAllIDsENR <- function(train.df, model.df, sites, resp, alpha, age.transform = 'none') {
   rbind( 
-    # cross-validation model for CR 4 & 5
+    # cross-validation model for training samples
     lapply(train.df$swfsc.id, function(cv.id) {
       fitTrainENR(filter(train.df, swfsc.id != cv.id), sites, resp, alpha, age.transform) |> 
         predictTestENR(filter(model.df, swfsc.id == cv.id), sites, resp, age.transform)
     }) |> 
       bind_rows(),
-    # full CR 4 & 5 model to predict CR 2 & 3
+    # full model to predict test samples
     fitTrainENR(train.df, sites, resp, alpha, age.transform) |> 
-      predictTestENR(filter(model.df, age.confidence %in% 2:3), sites, resp, age.transform)
+      predictTestENR(filter(model.df, !swfsc.id %in% train.df$swfsc.id), sites, resp, age.transform)
   ) 
 }
 

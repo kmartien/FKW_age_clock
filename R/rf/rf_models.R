@@ -4,10 +4,10 @@ library(randomForest)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
 
-minCR <- 2
+minCR <- 3
 sites.2.use <- 'RFsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
 age.transform <- 'ln'
-weight <- 'none' # 'CR', 'inv.var', 'sn.wt', 'none'
+weight <- 'CR' # 'CR', 'inv.var', 'sn.wt', 'none'
 if (weight == 'ci.wt') age.df$ci.wt <- calc.ci.wt(age.df)
 nrep <- 1000
 ncores <- 10

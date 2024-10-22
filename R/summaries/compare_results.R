@@ -9,7 +9,7 @@ load('data/age_and_methylation_data.rdata')
 age.df <- age.df |>  
   filter(swfsc.id %in% ids.to.keep)
 
-minCRs <- c(2, 4)
+minCRs <- c(2, 3, 4)
 sites.2.use <- c('RFsites', 'glmnet.5', 'Allsites')
 wts.2.use <- c('CR', 'ci.wt', 'none')
 
@@ -24,7 +24,6 @@ res.files$weight <- substr(res.files$weight, 1, nchar(res.files$weight) - 4)
 
 pred <- #bind_rows(
   left_join(
-#  filter(res.files, resample == 'best'),
   res.files, 
   lapply(1:nrow(res.files), function(f){
     data.frame(fname = res.files$fname[f], readRDS(paste0('R/', res.files$method[f], '/', res.files$fname[f])))
@@ -38,9 +37,13 @@ pred <- #bind_rows(
   mutate(resid = age.pred - age.best,
          dev = abs(resid),
          sq.err = resid ^ 2,
-         model = paste(resample, minCR, sites, age.transform, weight, sep = '_'))#, 
+         model = paste(resample, minCR, sites, age.transform, weight, sep = '_'),
+         best.age.bin = ifelse(age.best < 10, 0, ifelse(age.best < 25, 10, 25)),
+         pred.age.bin = ifelse(age.pred < 10, 0, ifelse(age.pred < 25, 10, 25))
+  ) 
 
 MAE.all <- 
+  left_join(
     pred |> 
       left_join(age.df) |> 
       filter(age.confidence %in% c(4,5)) |> 
@@ -48,7 +51,16 @@ MAE.all <-
       summarise(MAE = round(median(dev), 2),
                 lci = round(quantile(dev, probs = c(.25)),2),
                 uci = round(quantile(dev, probs = c(.75)),2),
-                Corr = round(cor.test(age.best, age.pred, method = "pearson")$estimate,2))
+                Corr = round(cor.test(age.best, age.pred, method = "pearson")$estimate,2),
+                mean.resid = round(mean(resid), 2)),
+    pred |> 
+      left_join(age.df) |> 
+      filter(age.confidence %in% c(4,5)) |> 
+      group_by(method, sites, weight, minCR, resample, best.age.bin) |> 
+      summarise(MAE = round(median(dev), 2),
+                mean.resid = round(mean(resid), 2)) |> 
+      pivot_wider(names_from = best.age.bin, values_from = c(MAE, mean.resid))
+  )
 write.csv(MAE.all, file = 'R/summaries/MAE.all.csv')
 
 # Base model box plot -----------------------------------------------
@@ -121,10 +133,7 @@ box.plot <-
                       'best_minCR4_glmnet.5_ln_none'),
          age.confidence %in% c(4,5),
          method %in% c('gam', 'svm')) |> 
-  #filter(age.confidence %in% c(4,5)) |> 
   mutate(sites = factor(sites, levels = c('RFsites', 'glmnet.5', 'Allsites'), ordered = TRUE)) |> 
-  #  mutate(age.conficence = as.factor(age.confidence)) |> 
-  #  mutate(minCR = as.factor(minCR)) |> 
   ggplot() +
   geom_boxplot(aes(x = sites, y = resid)) +
   scale_x_discrete(labels = c('RF sites', 'ENR sites', 'All sites')) +
@@ -185,19 +194,23 @@ box.plot <-
          method %in% c('gam', 'svm'),
          model %in% c('best_minCR4_RFsites_ln_none',
                       'ranAge_minCR4_RFsites_ln_none',
+                      'ranAge_minCR3_RFsites_ln_none',
                       'ranAge_minCR2_RFsites_ln_none',
                       'ranAgeMeth_minCR4_RFsites_ln_none',
+                      'ranAgeMeth_minCR3_RFsites_ln_none',
                       'ranAgeMeth_minCR2_RFsites_ln_none')) |>
   mutate(model = factor(model, levels = 
                           c('best_minCR4_RFsites_ln_none',
                             'ranAge_minCR4_RFsites_ln_none',
+                            'ranAge_minCR3_RFsites_ln_none',
                             'ranAge_minCR2_RFsites_ln_none',
                             'ranAgeMeth_minCR4_RFsites_ln_none',
+                            'ranAgeMeth_minCR3_RFsites_ln_none',
                             'ranAgeMeth_minCR2_RFsites_ln_none'),
                         ordered = TRUE)) |> 
   ggplot() +
   geom_boxplot(aes(x = model, y = resid)) +
-  scale_x_discrete(labels = c('None', 'HCsamps, Age', 'Allsamps, Age', 'HCsamps, Age&Meth', 'Allsamps, Age&Meth')) +
+  #scale_x_discrete(labels = c('None', 'HCsamps, Age', 'Allsamps, Age', 'HCsamps, Age&Meth', 'Allsamps, Age&Meth')) +
 #  ylim(c(0,25)) +
   labs(x = "Resampling",
        y = "Absolute age error (yrs)") + 
@@ -236,7 +249,7 @@ ranAgeMeth.plot <- ggplot(df, aes(x = age.best, y = age.pred)) +
     text = element_text(size = 20)
   ) +
   facet_wrap(resample~method, nrow = 4)
-jpeg(file = 'R/summaries/ranAgeMeth.minCR2.scatterplot.jpg', width = 600, height = 1200)
+jpeg(file = 'R/summaries/ranAgeMeth.minCR.scatterplot.jpg', width = 600, height = 1200)
 ranAgeMeth.plot
 dev.off()
 
