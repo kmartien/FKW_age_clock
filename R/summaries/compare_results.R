@@ -2,12 +2,15 @@ library(tidyverse)
 library(ggplot2)
 library(gridExtra)
 source("R/plotting.funcs.R")
+source('R/misc_funcs.R')
 load("data/color.palettes.rda")
 load('data/age_and_methylation_data.rdata')
 
 # subset all data
 age.df <- age.df |>  
-  filter(swfsc.id %in% ids.to.keep)
+  filter(swfsc.id %in% ids.to.keep) |> 
+  mutate(best.age.bin = ifelse(age.best < 10, 0, ifelse(age.best < 25, 10, 25)))
+
 
 minCRs <- c(2, 3, 4)
 sites.2.use <- c('RFsites', 'glmnet.5', 'Allsites')
@@ -48,7 +51,7 @@ MAE.all <-
       left_join(age.df) |> 
       filter(age.confidence %in% c(4,5)) |> 
       group_by(method, sites, weight, minCR, resample) |> 
-      summarise(MAE = round(median(dev), 2),
+  summarise(MAE = round(median(dev), 2),
                 lci = round(quantile(dev, probs = c(.25)),2),
                 uci = round(quantile(dev, probs = c(.75)),2),
                 Corr = round(cor.test(age.best, age.pred, method = "pearson")$estimate,2),
@@ -73,7 +76,7 @@ df <- pred |>
          method = factor(method, levels = c('gam', 'svm', 'glmnet', 'rf')))
 plot.titles <- data.frame(label = c('gam', 'glmnet', 'rf', 'svm'), title = c('GAM', 'ENR', 'RF', 'SVM'))
 base.plot <- lapply(c('gam', 'svm', 'glmnet', 'rf'), function(m){
-  p <- plot.loov.res(filter(df, method == m), 4)$p.loov + 
+  p <- plot.loov.res(filter(df, method == m), yvar = 'resid', min.CR = 4)$p.loov + 
     ggtitle(plot.titles$title[which(plot.titles$label == m)]) 
   return(p)
 })
@@ -83,45 +86,59 @@ jpeg(file = 'R/summaries/base.model.plot.jpg', width = 600, height = 1200)
 do.call(grid.arrange, base.plot)
 dev.off()
 
-residuals.plot <-
-  filter(df, age.confidence > 3) |> 
-  ggplot(aes(x = age.best, y = resid)) +
-  geom_point(aes(color = factor(age.confidence)), size = 3, show.legend = FALSE) +
-  stat_smooth(aes(color = 'black', fill = NULL), 
-              show.legend = FALSE,
-              method = "lm", 
-              formula = y ~ x, 
-              geom = "smooth") +
-  scale_color_manual(values = conf.colors) +
-  geom_abline(slope = 0, color = "black", linewidth = 0.5, linetype = 2) +
-  labs(x = 'Agebest',
-       y = 'Residual') +  
-  theme_minimal() +
-  theme(text = element_text(size = 20)) +
-  facet_wrap(~method, nrow = 4,
-             labeller = labeller(method = c(
-               'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
-             )))
-jpeg(file = 'R/summaries/residuals.plot.jpg', width = 600, height = 1200)
-residuals.plot
+residuals.base.plot <- lapply(c('gam', 'svm', 'glmnet', 'rf'), function(m){
+  p <- plot.residuals(filter(df, method == m), min.CR = 4) + 
+    ggtitle(plot.titles$title[which(plot.titles$label == m)]) 
+  return(p)
+})
+residuals.base.plot$nrow = 2
+jpeg(file = 'R/summaries/residuals.plot.jpg', width = 1200, height = 800)
+do.call(grid.arrange, residuals.base.plot)
 dev.off()
+
+# residuals.plot <-
+#   filter(df, age.confidence > 3) |> 
+#   ggplot(aes(x = age.best, y = resid)) +
+#   geom_point(aes(color = factor(age.confidence)), size = 3, show.legend = FALSE) +
+#   stat_smooth(aes(color = 'black', fill = NULL), 
+#               show.legend = FALSE,
+#               method = "lm", 
+#               formula = y ~ x, 
+#               geom = "smooth") +
+#   scale_color_manual(values = conf.colors) +
+#   geom_abline(slope = 0, color = "black", linewidth = 0.5, linetype = 2) +
+#   annotation_custom(tableGrob(data.frame(
+#     filter(df, age.confidence > 3) |> summarise(MAE = round(median(dev), 2)) |> pull(MAE),
+#     Corr = filter(df, age.confidence > 3) |> summarise(round(cor.test(age.best, age.pred, method = "pearson")$estimate,2))),
+#     theme = ttheme_minimal(base_size = 16)), xmax = Inf, ymax = Inf) +
+#   labs(x = 'Agebest',
+#        y = 'Residual') +  
+#   theme_minimal() +
+#   theme(text = element_text(size = 20)) +
+#   facet_wrap(~method, nrow = 4,
+#              labeller = labeller(method = c(
+#                'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+#              )))
+# jpeg(file = 'R/summaries/residuals.plot.jpg', width = 600, height = 1200)
+# residuals.base.plot
+# dev.off()
 df |> filter(age.best > 24) |> group_by(method) |> filter(age.confidence > 3) |> summarise(mean.resid = mean(resid))
 
-box.plot <-
-  pred |>
-  filter(model == 'best_minCR4_RFsites_ln_none') |>
-  left_join(age.df) |>
-  filter(age.confidence %in% c(4,5)) |>
-  ggplot() +
-  geom_boxplot(aes(x = method, y = resid)) +
-  ylim(-25, 25) +
-  scale_x_discrete(labels = c('GAM', 'ENR', 'RF', 'SVM')) +
-  labs(x = "Method",
-       y = "Absolute age error (yrs)") +
-  theme(text = element_text(size = 24))
-jpeg(file = 'R/summaries/base.model.boxplot.jpg', width = 700, height = 1200)
-box.plot
-dev.off()
+# box.plot <-
+#   pred |>
+#   filter(model == 'best_minCR4_RFsites_ln_none') |>
+#   left_join(age.df) |>
+#   filter(age.confidence %in% c(4,5)) |>
+#   ggplot() +
+#   geom_boxplot(aes(x = method, y = resid)) +
+#   ylim(-25, 25) +
+#   scale_x_discrete(labels = c('GAM', 'ENR', 'RF', 'SVM')) +
+#   labs(x = "Method",
+#        y = "Absolute age error (yrs)") +
+#   theme(text = element_text(size = 24))
+# jpeg(file = 'R/summaries/base.model.boxplot.jpg', width = 700, height = 1200)
+# box.plot
+# dev.off()
 
 # Site selection box plot -----------------------------------------------
 
@@ -132,7 +149,7 @@ box.plot <-
                       'best_minCR4_Allsites_ln_none',
                       'best_minCR4_glmnet.5_ln_none'),
          age.confidence %in% c(4,5),
-         method %in% c('gam', 'svm')) |> 
+         method == 'gam') |> 
   mutate(sites = factor(sites, levels = c('RFsites', 'glmnet.5', 'Allsites'), ordered = TRUE)) |> 
   ggplot() +
   geom_boxplot(aes(x = sites, y = resid)) +
@@ -140,12 +157,12 @@ box.plot <-
   #  ylim(c(0,20)) +
   labs(x = "CpG set used",
        y = "Absolute age error (yrs)") +  
-  theme_minimal() +
-  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 45, hjust=1))+
-  facet_wrap(~method, nrow = 1, labeller = labeller(method = c(
-    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
-  )))
-jpeg(file = 'R/summaries/site.selection.boxplot.jpg', width = 700, height = 700)
+#  theme_minimal() +
+  theme(text = element_text(size = 24), axis.text.x = element_text(angle = 45, hjust=1))
+  # facet_wrap(~method, nrow = 1, labeller = labeller(method = c(
+  #   'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
+  # )))
+jpeg(file = 'R/summaries/site.selection.boxplot.jpg', width = 400, height = 700)
 box.plot
 dev.off()
 
@@ -156,31 +173,18 @@ box.plot <-
   pred |> 
   left_join(age.df) |> 
   filter(age.confidence %in% c(4,5),
-         method %in% c('gam', 'svm'),
-         model %in% c('best_minCR4_RFsites_ln_none', 
-                      'best_minCR2_RFsites_ln_none', 
-                      'best_minCR2_RFsites_ln_CR',
-                      'best_minCR2_RFsites_ln_ci.wt')) |> 
-  mutate(model = factor(model, levels = 
-                          c('best_minCR4_RFsites_ln_none', 
-                            'best_minCR2_RFsites_ln_none', 
-                            'best_minCR2_RFsites_ln_CR',
-                            'best_minCR2_RFsites_ln_ci.wt'),
-                        ordered = TRUE),
-         weight = factor(weight, levels = c('none', 'CR', 'ci.wt'), ordered = TRUE)) |> 
-  #  mutate(age.conficence = as.factor(age.confidence)) |> 
-  #  mutate(minCR = as.factor(minCR)) |> 
+         method == 'gam',
+         resample == 'best') |> 
+         mutate(weight = factor(weight, levels = c('none', 'CR', 'ci.wt'), ordered = TRUE)) |> 
   ggplot() +
-  geom_boxplot(aes(x = model, y = resid)) +
-  scale_x_discrete(labels = c('Base', 'Unweighted', 'CR', 'ci weight')) +
-  #  ylim(c(0,20)) +
+  geom_boxplot(aes(x = weight, y = resid)) +
+  geom_hline(yintercept = 0, linetype = 'dotted') +
+  scale_x_discrete(labels = c('Unweighted', 'CR', 'RW')) +
   labs(x = "Weight scheme",
-       y = "Absolute age error (yrs)") +  
-  theme_minimal() +
+       y = "Residual (yrs)") +  
   theme(text = element_text(size = 24), axis.text.x = element_text(angle = 45, hjust=1))+
-  facet_wrap(~method, nrow = 1, labeller = labeller(method = c(
-    'svm' = 'SVM', 'glmnet' = 'ENR', 'gam' = 'GAM', 'rf' = 'RF'
-  )))
+  facet_wrap(~minCR, nrow = 1, labeller = labeller(method = c(
+    'minCR2' = 'All samples', 'minCR3' = 'CR3+ samples', 'minCR4' = 'CR4+ samples')))
 jpeg(file = 'R/summaries/minCR.weight.boxplot.jpg', width = 700, height = 700)
 box.plot
 dev.off()

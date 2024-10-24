@@ -4,7 +4,7 @@ library(randomForest)
 library(rfPermute)
 load("data/age_and_methylation_data.rdata")
 
-minCR <- 4
+minCR <- 3
 
 #' run randomForest over sampsize and mtry grid and report deviance stats
 rf.param.grid.search <- function(model.df, sites){
@@ -61,8 +61,8 @@ param.df |>
 rf.params <- list()
 rf.params$Allsites <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
-rf.params$Allsites$mtry <- 63
-rf.params$Allsites$sampsize <- 35
+#rf.params$Allsites$mtry <- 63
+#rf.params$Allsites$sampsize <- 35
 save(rf.params, file = paste0('R/rf_tuning/rf_optim_params_minCR', minCR, '.rda'))
 
 # RFsites ------------------------------------------------------------------
@@ -82,7 +82,7 @@ param.df |>
 rf.params$RFsites <- filter(param.df, mse == min(param.df$mse)) |>
   select(c(mtry, sampsize))
 #rf.params$RFsites$mtry <- 12
-#rf.params$RFsites$sampsize <- 34
+rf.params$RFsites$sampsize <- 49
 save(rf.params, file = paste0('R/rf_tuning/rf_optim_params_minCR', minCR, '.rda'))
 
 # glmnet.5 sites ------------------------------------------------------------------
