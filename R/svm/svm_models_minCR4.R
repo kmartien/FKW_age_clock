@@ -4,16 +4,18 @@ library(mgcv)
 library(e1071)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
+load('data/corrected.meth.rda')
 load('R/svm/svm.tuning.rda')
 
-sites.2.use <- 'RFsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
-minCR <- 3
+sites.2.use <- 'glmnet.June' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites', 'glmnet.June
+minCR <- 4
 age.transform <- 'ln'
 weight <- 'none'
 nrep <- 1000
 ncores <- 10
 
-svm.params <- svm.tuning$CR4_5[[sites.2.use]]$best.parameters
+#svm.params <- svm.tuning$CR4_5[[sites.2.use]]$best.parameters
+svm.params <- svm.tuning$CR4_5$glmnet.5$best.parameters
 
 sites <- sites.to.keep
 if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
@@ -27,12 +29,16 @@ model.df <- age.df |>
       if (weight == 'CR') age.confidence else 1
   }) |> 
   left_join(
-    logit.meth.normal.params |> 
-      select(swfsc.id, loc.site, mean.logit) |>
-      pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
+    # logit.meth.normal.params |> 
+    #   select(swfsc.id, loc.site, mean.logit) |>
+    #   pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
+    corrected.meth,
     by = 'swfsc.id'
   )
-
+NAs.by.sample <- sapply(1:nrow(model.df), function(s){
+  length(which(is.na(model.df[s,all_of(sites.to.keep)])))
+})
+model.df <- model.df[-which(NAs.by.sample>0),]
 
 train.df <- filter(model.df, age.confidence >= minCR)
 
@@ -40,12 +46,12 @@ train.df <- filter(model.df, age.confidence >= minCR)
  
 ##########################################
 # Loop through all site selection options
-# lapply(c('Allsites', 'RFsites', 'glmnet.5'), function(sites.2.use){
+# lapply(c('glmnet.June'), function(sites.2.use){
 #   sites <- sites.to.keep
 #   if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
-# predictAllIDsSVM(train.df, model.df, sites, 'age.best', svm.params, age.transform) |>
-#   saveRDS(paste0('R/svm/svm_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '_', weight, '.rds'))
-# })
+pred <- predictAllIDsSVM(train.df, model.df, sites, 'age.best', svm.params, age.transform)
+  saveRDS(pred, paste0('R/svm/svm_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '_', weight, '.rds'))
+#})
 
 # Random age and best methylation estimates -------------------------------
 

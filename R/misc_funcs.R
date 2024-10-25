@@ -145,12 +145,18 @@ selectCpGsites <- function(sites.2.use){
   }
   if(sites.2.use == 'glmnet.5'){
     # select chosen sites from glmnet tuned with all samples, alpha = 0.5
-    sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$minCR2$alpha.5
+    sites <- readRDS('R/glmnet/glmnet.chosen.sites.rds')$minCR4$alpha.5
   }
   if(sites.2.use == 'gamsites'){
     # select chosen sites from gam.by.site
     sites <- readRDS('R/gam/gam_significant_sites.rds') |>
       filter(r.sq >= 0.35) |>
+      pull('loc.site')
+  }
+  if(sites.2.use == 'glmnet.June'){
+    # use the sites chosen by my glmnet runs in June
+    sites <- readRDS('R/glmnet/glmnet.June.chosen.sites.rds') |> 
+      filter(prob >= 50) |> 
       pull('loc.site')
   }
   return(sites)

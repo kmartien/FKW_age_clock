@@ -4,9 +4,10 @@ library(mgcv)
 source('R/misc_funcs.R')
 source('R/calc.ci.wt.R')
 load("data/age_and_methylation_data.rdata")
+load('data/corrected.meth.rda')
 
-sites.2.use <- 'RFsites' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites'
-minCR <- 3
+sites.2.use <- 'glmnet.June' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites', 'glmnet.June'
+minCR <- 4
 age.transform <- 'ln'
 weight <- 'none' # 'CR', 'ci.wt', 'none'
 if (weight == 'ci.wt') age.df$ci.wt <- calc.ci.wt(age.df)
@@ -26,11 +27,16 @@ age.df <- age.df |>
 # form model data with mean logit(Pr(methylation))
 model.df <- age.df |> 
   left_join(
-    logit.meth.normal.params |> 
-      select(swfsc.id, loc.site, mean.logit) |>
-      pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
+    # logit.meth.normal.params |> 
+    #   select(swfsc.id, loc.site, mean.logit) |>
+    #   pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
+    corrected.meth,
     by = 'swfsc.id'
   )
+NAs.by.sample <- sapply(1:nrow(model.df), function(s){
+  length(which(is.na(model.df[s,all_of(sites.to.keep)])))
+})
+model.df <- model.df[-which(NAs.by.sample>0),]
 
 train.df <- filter(model.df, age.confidence >= minCR)
 
@@ -40,14 +46,14 @@ if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 # Best age and methylation estimates --------------------------------------
 
 # message(format(Sys.time()), ' : Best - All')
-# pred.best <- if (minCR == 2){
-#   # LOO cross validation for all samples
-#   lapply(model.df$swfsc.id, function(cv.id) {
-#     fitTrainGAM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', age.transform) |>
-#       predictTestGAM(filter(model.df, swfsc.id == cv.id), 'age.best', age.transform)
-#   })|> bind_rows()
-# } else {predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform)}
-# saveRDS(pred.best, paste0('R/gam/gam_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+pred.best <- if (minCR == 2){
+  # LOO cross validation for all samples
+  lapply(model.df$swfsc.id, function(cv.id) {
+    fitTrainGAM(filter(model.df, swfsc.id != cv.id), sites, 'age.best', age.transform) |>
+      predictTestGAM(filter(model.df, swfsc.id == cv.id), 'age.best', age.transform)
+  })|> bind_rows()
+} else {predictAllIDsGAM(train.df, model.df, sites, 'age.best', age.transform)}
+saveRDS(pred.best, paste0('R/gam/gam_best_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
 
 # Random age and best methylation estimates -------------------------------
 
