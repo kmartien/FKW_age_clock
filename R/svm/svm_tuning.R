@@ -1,5 +1,4 @@
 library(tidyverse)
-library(mgcv)
 library(e1071)
 source('R/misc_funcs.R')
 load("data/age_and_methylation_data.rdata")

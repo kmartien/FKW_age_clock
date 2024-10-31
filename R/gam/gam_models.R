@@ -4,7 +4,6 @@ library(mgcv)
 source('R/misc_funcs.R')
 source('R/calc.ci.wt.R')
 load("data/age_and_methylation_data.rdata")
-load('data/corrected.meth.rda')
 
 sites.2.use <- 'glmnet.June' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites', 'glmnet.June'
 minCR <- 4
@@ -30,13 +29,15 @@ model.df <- age.df |>
     # logit.meth.normal.params |> 
     #   select(swfsc.id, loc.site, mean.logit) |>
     #   pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
-    corrected.meth,
+     logit.meth |> 
+       select(swfsc.id, loc.site, logit.meth) |>
+       pivot_wider(names_from = 'loc.site', values_from = 'logit.meth'),
     by = 'swfsc.id'
   )
-NAs.by.sample <- sapply(1:nrow(model.df), function(s){
-  length(which(is.na(model.df[s,all_of(sites.to.keep)])))
-})
-model.df <- model.df[-which(NAs.by.sample>0),]
+# NAs.by.sample <- sapply(1:nrow(model.df), function(s){
+#   length(which(is.na(model.df[s,all_of(sites.to.keep)])))
+# })
+# model.df <- model.df[-which(NAs.by.sample>0),]
 
 train.df <- filter(model.df, age.confidence >= minCR)
 

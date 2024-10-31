@@ -13,7 +13,7 @@ age.df <- age.df |>
 
 
 minCRs <- c(2, 3, 4)
-sites.2.use <- c('RFsites', 'glmnet.5', 'Allsites')
+sites.2.use <- c('RFsites', 'glmnet.5', 'Allsites', 'glmnet.June')
 wts.2.use <- c('CR', 'ci.wt', 'none')
 
 res.files <- 
@@ -25,7 +25,7 @@ res.files <-
 names(res.files) <- c('fname', 'method', 'resample', 'minCR', 'sites', 'age.transform', 'weight')
 res.files$weight <- substr(res.files$weight, 1, nchar(res.files$weight) - 4)
 
-pred <- #bind_rows(
+pred <- 
   left_join(
   res.files, 
   lapply(1:nrow(res.files), function(f){
@@ -76,11 +76,11 @@ df <- pred |>
          method = factor(method, levels = c('gam', 'svm', 'glmnet', 'rf')))
 plot.titles <- data.frame(label = c('gam', 'glmnet', 'rf', 'svm'), title = c('GAM', 'ENR', 'RF', 'SVM'))
 base.plot <- lapply(c('gam', 'svm', 'glmnet', 'rf'), function(m){
-  p <- plot.loov.res(filter(df, method == m), yvar = 'resid', min.CR = 4)$p.loov + 
+  p <- plot.loov.res(filter(df, method == m), min.CR = 4)$p.loov + 
     ggtitle(plot.titles$title[which(plot.titles$label == m)]) 
   return(p)
 })
-#names(base.plot) <- c('GAM', 'SVM', 'ENR', 'RF')
+names(base.plot) <- c('GAM', 'SVM', 'ENR', 'RF')
 base.plot$nrow = 4
 jpeg(file = 'R/summaries/base.model.plot.jpg', width = 600, height = 1200)
 do.call(grid.arrange, base.plot)

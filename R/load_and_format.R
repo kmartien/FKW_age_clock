@@ -6,14 +6,14 @@ library(runjags)
 library(parallel)
 library(abind)
 library(gridExtra)
-source("misc_funcs.R")
+source("R/misc_funcs.R")
 set.seed(1)
 
 
 # Load and format age data ------------------------------------------------
 
 crc.data <- read.csv(
-  '../data_raw/Pseudorca_AgeEstimates_Simplified_2024FEBv2.csv',
+  'data_raw/Pseudorca_AgeEstimates_Simplified_2024FEBv2.csv',
   na.strings = c(NA, 'NA', '')
 ) 
 
@@ -62,7 +62,7 @@ crc.cols <- c(
   "age.best", "age.confidence", "age.min", "age.max", "age.class", "pair.id"
 )
 conf.map <- read_csv(
-  '../data_raw/CRC_confidence_rating_mappings.csv',
+  'data_raw/CRC_confidence_rating_mappings.csv',
   name_repair = 'minimal',
   show_col_types = FALSE
 ) |> 
@@ -70,7 +70,7 @@ conf.map <- read_csv(
   as.matrix()
 age.df <- crc.data[, crc.cols] |> 
   mutate( 
-    confidence.wt = unname(conf.map["sd", age.confidence]),
+    confidence.wt = unname(conf.map["sm", age.confidence]),
     date.biopsy = as.POSIXct(date.biopsy, format = "%m/%d/%y"),
     sex.num = as.numeric(factor(sex))
   )  |> 
@@ -141,8 +141,8 @@ conf.colors[5] <- 'gray40'
 
 # Load and format methylation data ----------------------------------------
 
-load("../data_raw/Pcra.epi.data.for.Eric.Rdata")
-load("../data_raw/res.sum.Rdata")
+#load("data_raw/Pcra.epi.data.for.Eric.Rdata")
+load("data_raw/res.sum.Rdata")
 
 epi.df <- do.call(
   rbind,
@@ -399,8 +399,21 @@ pair.df <- split(pair.df, pair.df$pair.id) |>
   }) |>
   bind_rows()
 
+# Logit transformed methylation -------------------------------------------------------
 
-# Estimate true methylation -----------------------------------------------
+# calculate minimum non-zero raw methylation at each locus
+logit.meth <- left_join(cpg, 
+  filter(cpg, pct.meth > 0) |> 
+  group_by(loc.site) |> 
+  summarise(min.non.zero = min(pct.meth))) |> 
+  mutate(
+  pct.meth = ifelse(pct.meth == 0, 0.01 * min.non.zero, pct.meth),
+                    logit.meth = swfscMisc::logOdds(pct.meth)
+) |> 
+  select(c(id, loc.site, logit.meth)) |> 
+  rename(swfsc.id = id)
+
+# Bayesian estimate of true methylation -----------------------------------------------
 
 post <- run.jags(
   model = "model {
@@ -473,9 +486,9 @@ logit.meth.normal.params <- qlogis(p$p.meth) |>
 save(
   age.df, conf.colors, epi.df, cpg, non.cpg, meth,
   locus.map, locus, site.smry,
-  ids.to.keep, sites.to.keep, pair.df,
+  ids.to.keep, sites.to.keep, pair.df, logit.meth,
   logit.meth.normal.params,
-  file = "age_and_methylation_data.rdata"
+  file = "data/age_and_methylation_data.rdata"
 )
 
 

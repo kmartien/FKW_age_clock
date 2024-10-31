@@ -4,7 +4,6 @@ library(mgcv)
 library(e1071)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
-load('data/corrected.meth.rda')
 load('R/svm/svm.tuning.rda')
 
 sites.2.use <- 'glmnet.June' #'Allsites', 'RFsites', 'glmnet.5', 'gamsites', 'glmnet.June
@@ -15,7 +14,10 @@ nrep <- 1000
 ncores <- 10
 
 #svm.params <- svm.tuning$CR4_5[[sites.2.use]]$best.parameters
-svm.params <- svm.tuning$CR4_5$glmnet.5$best.parameters
+svm.params <- svm.tuning$CR4_5$RFsites$best.parameters
+#for minCR4, glmnet.June:
+svm.params$cost <- 794.3282
+svm.params$gamma <- 1.995262e-05
 
 sites <- sites.to.keep
 if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
@@ -32,13 +34,11 @@ model.df <- age.df |>
     # logit.meth.normal.params |> 
     #   select(swfsc.id, loc.site, mean.logit) |>
     #   pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
-    corrected.meth,
+    logit.meth |> 
+      select(swfsc.id, loc.site, logit.meth) |>
+      pivot_wider(names_from = 'loc.site', values_from = 'logit.meth'),
     by = 'swfsc.id'
   )
-NAs.by.sample <- sapply(1:nrow(model.df), function(s){
-  length(which(is.na(model.df[s,all_of(sites.to.keep)])))
-})
-model.df <- model.df[-which(NAs.by.sample>0),]
 
 train.df <- filter(model.df, age.confidence >= minCR)
 
