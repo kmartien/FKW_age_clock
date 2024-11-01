@@ -16,7 +16,7 @@ model.df <- age.df |>
   column_to_rownames('swfsc.id') 
 
 
-# standard inverse variance weighted LOO cv.glmnet run at given alpha
+# standard 10-fold cv.glmnet run at given alpha
 CVglmnet10K <- function(df, sites, alpha) {
   cv.glmnet(
     x = as.matrix(df[, sites]),

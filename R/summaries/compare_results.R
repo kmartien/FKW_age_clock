@@ -50,7 +50,7 @@ MAE.all <-
     pred |> 
       left_join(age.df) |> 
       filter(age.confidence %in% c(4,5)) |> 
-      group_by(method, sites, weight, minCR, resample) |> 
+      group_by(method, sites, weight, minCR, resample, age.transform) |> 
   summarise(MAE = round(median(dev), 2),
                 lci = round(quantile(dev, probs = c(.25)),2),
                 uci = round(quantile(dev, probs = c(.75)),2),
@@ -59,7 +59,7 @@ MAE.all <-
     pred |> 
       left_join(age.df) |> 
       filter(age.confidence %in% c(4,5)) |> 
-      group_by(method, sites, weight, minCR, resample, best.age.bin) |> 
+      group_by(method, sites, weight, minCR, resample, age.transform, best.age.bin) |> 
       summarise(MAE = round(median(dev), 2),
                 mean.resid = round(mean(resid), 2)) |> 
       pivot_wider(names_from = best.age.bin, values_from = c(MAE, mean.resid))

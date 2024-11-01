@@ -401,17 +401,21 @@ pair.df <- split(pair.df, pair.df$pair.id) |>
 
 # Logit transformed methylation -------------------------------------------------------
 
-# calculate minimum non-zero raw methylation at each locus
-logit.meth <- left_join(cpg, 
-  filter(cpg, pct.meth > 0) |> 
-  group_by(loc.site) |> 
-  summarise(min.non.zero = min(pct.meth))) |> 
-  mutate(
-  pct.meth = ifelse(pct.meth == 0, 0.01 * min.non.zero, pct.meth),
-                    logit.meth = swfscMisc::logOdds(pct.meth)
-) |> 
-  select(c(id, loc.site, logit.meth)) |> 
-  rename(swfsc.id = id)
+logit.meth <- do.call('cbind',lapply(1:length(res.sum), function(amp){
+  s <- res.sum[[amp]]
+  last.pos <- dim(s$CpG.sum$freq.meth)[2]
+  meth <- s$CpG.sum$freq.meth[,2:last.pos]
+  corrected.cov <- s$CpG.sum$coverage[,2:last.pos] - s$CpG.sum$errors[,2:last.pos]
+  x <- meth/(corrected.cov)
+  x <- 1-((1-x)/non.cpg$pct.conv)
+  rownames(x) <- s$CpG.sum$freq.meth[,1]
+  colnames(x) <- paste(names(res.sum)[amp],zero.pad(as.numeric(colnames(meth))),sep="_")
+  for (j in 1:ncol(x)){
+    col.min.nonzero <- min(x[which(x[,j] > 0),j])
+    x[which(x[,j] <= 0),j] <- col.min.nonzero * 0.5
+  }
+  return(log(x/(1-x)))
+}))
 
 # Bayesian estimate of true methylation -----------------------------------------------
 

@@ -1,6 +1,5 @@
 rm(list=ls())
 library(tidyverse)
-library(mgcv)
 library(e1071)
 source('R/misc_funcs.R')
 load('data/age_and_methylation_data.rdata')
@@ -13,11 +12,10 @@ weight <- 'none'
 nrep <- 1000
 ncores <- 10
 
-#svm.params <- svm.tuning$CR4_5[[sites.2.use]]$best.parameters
-svm.params <- svm.tuning$CR4_5$RFsites$best.parameters
-#for minCR4, glmnet.June:
-svm.params$cost <- 794.3282
-svm.params$gamma <- 1.995262e-05
+svm.tuning$CR4_5$glmnet.June <- svm.tuning$CR4_5$glmnet.5
+svm.tuning$CR4_5$glmnet.June$best.parameters$cost <- 794.3282
+svm.tuning$CR4_5$glmnet.June$best.parameters$gamma <- 1.995262e-05
+svm.params <- svm.tuning$CR4_5[[sites.2.use]]$best.parameters
 
 sites <- sites.to.keep
 if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
@@ -34,10 +32,8 @@ model.df <- age.df |>
     # logit.meth.normal.params |> 
     #   select(swfsc.id, loc.site, mean.logit) |>
     #   pivot_wider(names_from = 'loc.site', values_from = 'mean.logit'),
-    logit.meth |> 
-      select(swfsc.id, loc.site, logit.meth) |>
-      pivot_wider(names_from = 'loc.site', values_from = 'logit.meth'),
-    by = 'swfsc.id'
+    rownames_to_column(logit.meth, var = 'swfsc.id') #|> 
+      #select(c(swfsc.id, all_of(sites)))
   )
 
 train.df <- filter(model.df, age.confidence >= minCR)
@@ -46,12 +42,12 @@ train.df <- filter(model.df, age.confidence >= minCR)
  
 ##########################################
 # Loop through all site selection options
-# lapply(c('glmnet.June'), function(sites.2.use){
-#   sites <- sites.to.keep
-#   if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
+ lapply(c('Allsites', 'RFsites', 'glmnet.5', 'glmnet.June'), function(sites.2.use){
+   sites <- sites.to.keep
+   if(sites.2.use != 'Allsites') sites <- selectCpGsites(sites.2.use)
 pred <- predictAllIDsSVM(train.df, model.df, sites, 'age.best', svm.params, age.transform)
-  saveRDS(pred, paste0('R/svm/svm_best_minCR', minCR, '_', sites.2.use,'_', age.transform, '_', weight, '.rds'))
-#})
+  saveRDS(pred, paste0('R/svm/svm_best_minCR', minCR, '_', sites.2.use,'_', age.transform, 'KKMmeth_', weight, '.rds'))
+})
 
 # Random age and best methylation estimates -------------------------------
 
@@ -73,12 +69,12 @@ pred <- predictAllIDsSVM(train.df, model.df, sites, 'age.best', svm.params, age.
 # 
 # Random age and random methylation estimates -----------------------------
 
- pred.ranAgeMeth <- parallel::mclapply(1:nrep, function(j) {
-  # random sample of ages and methylation
-  ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
-
-  train.df <- filter(ran.df, age.confidence >= minCR)
-  predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', svm.params)
-}, mc.cores = ncores) |>
-  bind_rows()
-saveRDS(pred.ranAgeMeth, paste0('R/svm/svm_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
+#  pred.ranAgeMeth <- parallel::mclapply(1:nrep, function(j) {
+#   # random sample of ages and methylation
+#   ran.df <- sampleAgeMeth(age.df, logit.meth.normal.params)
+# 
+#   train.df <- filter(ran.df, age.confidence >= minCR)
+#   predictAllIDsSVM(train.df, ran.df, sites, 'age.ran', svm.params)
+# }, mc.cores = ncores) |>
+#   bind_rows()
+# saveRDS(pred.ranAgeMeth, paste0('R/svm/svm_ranAgeMeth_minCR', minCR, '_', sites.2.use, '_', age.transform, '_', weight, '.rds'))
